@@ -1,4 +1,4 @@
-const C = 'ink-swing-v4';
+const C = 'ink-swing-v5';
 const A = ['./', 'index.html', 'style.css', 'game.js', 'manifest.webmanifest', 'fonts/ArchivoBlack-latin.woff2', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   ...['splat1', 'splat2', 'splat3', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish', 'silence'].map(n => `sfx/${n}.wav`)];
 self.addEventListener('install', e => e.waitUntil(caches.open(C).then(c => c.addAll(A)).then(() => self.skipWaiting())));

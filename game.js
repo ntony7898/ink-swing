@@ -90,7 +90,7 @@ function newRun(mode) {
   S.p = { x: 120, y: 470 }; S.v = { x: 0, y: 0 };
   S.pin = S.pins[0]; S.L = Math.hypot(S.p.x - 260, S.p.y - 300);
   S.holding = true; S.startX = S.p.x; S.maxX = S.p.x; S.bonus = 0; S.score = 0; S.palIdx = 0; S.palT = 1; S.prevPal = 0;
-  S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.sid = 0; S.poolT = 0; S.last = null; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0;
+  S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.sid = 0; S.poolT = 0; S.last = null; S.passed = 0; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0;
   S.trailStart = 0; S.cans = []; S.boostT = 0; S.boostReached = false; S.boostCount = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
   $('score').textContent = '0'; $('score').classList.remove('boost'); setPalLabel();
   $('hud').classList.remove('hidden'); $('start').classList.remove('show'); $('over').classList.remove('show');
@@ -127,7 +127,23 @@ function drawOp(g, o, wk) { g.globalCompositeOperation = o.m ? 'multiply' : 'sou
   else if (o.t === 'p') { const r = o.r * wk; g.fillStyle = o.c; g.beginPath(); g.ellipse(o.x, o.y, r * 1.15, r, 0, 0, 6.283); g.fill(); g.globalAlpha = .3; g.fillStyle = o.dk; g.beginPath(); g.arc(o.x + r * .15, o.y + r * .2, r * .6, 0, 6.283); g.fill();
     g.globalAlpha = .35; g.fillStyle = '#fff'; g.beginPath(); g.ellipse(o.x - r * .35, o.y - r * .35, r * .3, r * .13, -.6, 0, 6.283); g.fill(); g.globalAlpha = 1; }
   else if (o.t === 'r') drawDrip(g, o, o.max, wk);
+  else if (o.t === 'k') drawStamp(g, o);
   g.globalCompositeOperation = 'source-over'; }
+/* screenprint stamps: flat marks for passed pins / smashed cans, two misregistered overprint passes */
+function stampPath(g, o) { const r = o.r; g.beginPath();
+  if (o.sh === 'ring') { g.arc(0, 0, r, 0, 6.283); g.arc(0, 0, r * .62, 0, 6.283, true); }
+  else if (o.sh === 'cross') { const w = r * .32; g.rect(-r, -w, 2 * r, 2 * w); g.rect(-w, -r, 2 * w, r - w); g.rect(-w, w, 2 * w, r - w); }
+  else if (o.sh === 'gate') { const w = r * .26; g.rect(-r, -r, w, 2 * r); g.rect(r - w, -r, w, 2 * r); g.rect(-r, -r, 2 * r, w); }
+  else if (o.sh === 'half') { g.arc(0, 0, r, Math.PI, 0); g.closePath(); }
+  else if (o.sh === 'tri') { g.moveTo(0, -r); g.lineTo(r * .95, r * .7); g.lineTo(-r * .95, r * .7); g.closePath(); }
+  else { for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283, rr = i % 2 ? r * .55 : r; i ? g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : g.moveTo(rr, 0); } g.closePath(); } }
+function drawStamp(g, o) { g.globalCompositeOperation = 'multiply';
+  for (const [c, dx, dy, al] of [[o.c, 0, 0, .78], [o.c2, o.off, -o.off * .6, .5]]) { g.save(); g.translate(o.x + dx, o.y + dy); g.rotate(o.rot); g.globalAlpha = al; g.fillStyle = c; stampPath(g, o); g.fill('evenodd'); g.restore(); }
+  g.globalAlpha = 1; }
+function stamp(x, y, big) { const P = pal(), cs = P.cols, i = Math.floor(Math.random() * cs.length);
+  const shapes = { bauhaus: ['ring', 'half', 'tri'], swiss: ['cross', 'gate', 'cross'], riso: ['ring', 'burst', 'half'], memphis: ['tri', 'gate', 'burst', 'ring'] }[P.deco];
+  const r = big ? 150 + Math.random() * 70 : 80 + Math.random() * 90, sh = big ? 'burst' : shapes[Math.floor(Math.random() * shapes.length)];
+  paint({ t: 'k', x, y, r, sh, rot: P.deco === 'swiss' ? 0 : (Math.random() - .5) * 1.2, c: cs[i], c2: cs[(i + 1) % cs.length], off: 4 + Math.random() * 5, bx0: x - r - 12, bx1: x + r + 12 }); }
 function drawDrip(g, o, len, wk) { const w = o.w * wk; g.fillStyle = o.c; g.strokeStyle = o.c; g.lineCap = 'round'; g.lineWidth = w; g.beginPath(); g.moveTo(o.x, o.y); g.lineTo(o.x, o.y + len); g.stroke();
   g.beginPath(); g.ellipse(o.x, o.y + len, w * .85, w * 1.05, 0, 0, 6.283); g.fill(); g.globalAlpha = .35; g.strokeStyle = '#fff'; g.lineWidth = Math.max(.6, w * .2);
   g.beginPath(); g.moveTo(o.x - w * .2, o.y + 2); g.lineTo(o.x - w * .2, o.y + Math.max(2, len - w * .4)); g.stroke(); g.globalAlpha = 1; }
@@ -210,6 +226,7 @@ function step(dt) {
     if (p.y < 30) { p.y = 30; if (v.y < 0) v.y *= -.3; }
     pushTrail();
     S.maxX = Math.max(S.maxX, p.x);
+    while (S.pins[S.passed] && S.pins[S.passed].x < p.x - 60) { const pn = S.pins[S.passed++]; if (S.passed > 1) stamp(pn.x + (Math.random() - .5) * 60, Math.min(WH - 120, pn.y + 160 + Math.random() * 260), false); }
     const sc = Math.floor((S.maxX - S.startX) / 120) + S.bonus;
     if (sc !== S.score) { S.score = sc; const e = $('score'); e.textContent = sc; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump');
       if (sc >= 100 && !S.boostReached) boostUnlock();
@@ -233,7 +250,7 @@ function step(dt) {
 function boostUnlock() { S.boostReached = true; S.boostT = 2; toast('INK BOOST!', pal().cols[0]); sfx.boost(); S.shake = 18; vibrate([20, 30, 20, 30, 40]);
   for (let i = 0; i < 4; i++) splat(S.p.x + (Math.random() - .5) * 200, S.p.y + (Math.random() - .5) * 200, pal().cols[i % pal().cols.length], 1.4);
   const sb = $('score'); sb.classList.add('boost'); }
-function collect(cn) { cn.got = true; S.boostT = 2.6; S.boostCount++; const sp = Math.hypot(S.v.x, S.v.y) || 1;
+function collect(cn) { cn.got = true; stamp(cn.x, cn.y, true); S.boostT = 2.6; S.boostCount++; const sp = Math.hypot(S.v.x, S.v.y) || 1;
   S.v.x = S.v.x / sp * Math.max(sp * 1.3, 1100) + 250; S.v.y = S.v.y / sp * Math.max(sp * 1.3, 1100) - 200;
   toast('INK BOOST!', pal().cols[S.boostCount % pal().cols.length]); sfx.boost(); S.shake = 12; vibrate(30); splat(cn.x, cn.y, pal().cols[0], 1.5); }
 function die() { sfx.death(); swish(0, false); deathSplash();
@@ -327,12 +344,14 @@ async function makePoster() {
   const ax = 60, ay = 450, aw = 960, ah = 1050;
   g.fillStyle = '#FFFFFF'; g.fillRect(ax, ay, aw, ah);
   const pts = S.trail; let mn = Infinity, mx = -Infinity, my = Infinity, My = -Infinity; for (const q of pts) { mn = Math.min(mn, q.x); mx = Math.max(mx, q.x); my = Math.min(my, q.y); My = Math.max(My, Math.min(WH + 60, q.y)); }
+  for (const o of S.ops) if (o.t === 'k') { my = Math.min(my, o.y - o.r); My = Math.max(My, Math.min(WH, o.y + o.r)); }
   const HY = Math.max(380, My - my + 160), y0 = my - 80;
   const L = Math.max(400, mx - mn + 80), n = Math.max(1, Math.round(Math.sqrt(L * ah / (aw * HY)))), sw = L / n, sh = ah / n, s = Math.min(aw / sw, sh / HY);
   for (let i = 0; i < n; i++) { g.save(); g.beginPath(); g.rect(ax, ay + i * sh, aw, sh); g.clip();
     g.translate(ax + (aw - sw * s) / 2, ay + i * sh + (sh - HY * s) / 2); g.scale(s, s); g.translate(-(mn - 40 + i * sw), -y0);
     const wk = Math.max(1, 1.1 / s), sx0 = mn - 40 + i * sw - 200, sx1 = sx0 + sw + 400;
-    for (const o of S.ops) if (o.bx1 > sx0 && o.bx0 < sx1) drawOp(g, o, wk); g.restore();
+    for (const o of S.ops) if (o.t === 'k' && o.bx1 > sx0 && o.bx0 < sx1) drawOp(g, o, 1); // stamps form the background composition
+    for (const o of S.ops) if (o.t !== 'k' && o.bx1 > sx0 && o.bx0 < sx1) drawOp(g, o, wk); g.restore();
     if (i) { g.fillStyle = '#141414'; g.fillRect(ax, ay + i * sh - 1, aw, 2); } }
   g.strokeStyle = '#141414'; g.lineWidth = 6; g.strokeRect(ax, ay, aw, ah);
   // footer
