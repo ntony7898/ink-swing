@@ -268,7 +268,6 @@ function step(dt) {
     if (p.y < 30) { p.y = 30; if (v.y < 0) v.y *= -.3; }
     pushTrail();
     S.maxX = Math.max(S.maxX, p.x);
-    while (S.pins[S.passed] && S.pins[S.passed].x < p.x - 60) { const pn = S.pins[S.passed++]; if (S.passed > 1) stamp(pn.x + (Math.random() - .5) * 60, Math.min(WH - 120, pn.y + 160 + Math.random() * 260), false); }
     const sc = Math.floor((S.maxX - S.startX) / 120) + S.bonus;
     if (sc !== S.score) { S.score = sc; const e = $('score'); e.textContent = sc; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump');
       if (sc >= 100 && !S.boostReached) boostUnlock();
