@@ -90,18 +90,19 @@ function genPins(upTo) {
     const vari = 110 + Math.min(300, i * 9);
     const y = Math.max(130, Math.min(600, 300 + (r() - .5) * vari));
     S.pins.push({ x: last.x + gap, y }); genObstacle(i, last, gap, y); if (S.chill) { S.obs.length = 0; S.orbs.length = 0; } // same rng use keeps pin layout identical
-    if (S.boostReached && Math.random() < .3) S.cans.push({ x: last.x + gap * (.4 + Math.random() * .2), y: Math.min(820, Math.max(last.y, y) + 120 + Math.random() * 220), got: false });
+    { const c = S.crng, roll = c(), ox = c(), oy = c(); // separate seeded stream: daily runs identical, pin layout untouched
+      if (i >= 5 && i - S.lastCan >= 3 && roll < .13 + Math.min(.07, i * .0012)) { S.lastCan = i; S.cans.push({ x: last.x + gap * (.4 + ox * .2), y: Math.min(820, Math.max(last.y, y) + 120 + oy * 220), got: false }); } }
   }
 }
 function newRun(mode) {
   S.mode = mode; S.seed = mode === 'daily' ? +today() : (Math.random() * 1e9) | 0;
-  S.rng = mulberry(S.seed);
+  S.rng = mulberry(S.seed); S.crng = mulberry((S.seed ^ 0x9E3779B9) >>> 0); S.lastCan = -9; S.cans = [];
   S.obs = []; S.orbs = []; S.saves = 1; S.graceT = 0; S.cur = 0; S.cleared = 0; S.cause = ''; S.pins = [{ x: 260, y: 300 }]; genPins(12);
   S.p = { x: 120, y: 470 }; S.v = { x: 0, y: 0 };
   S.pin = S.pins[0]; S.L = Math.hypot(S.p.x - 260, S.p.y - 300);
   S.holding = true; S.startX = S.p.x; S.maxX = S.p.x; S.bonus = 0; S.score = 0; S.palIdx = 0; S.palT = 1; S.prevPal = 0;
   S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.sid = 0; S.poolT = 0; S.last = null; S.passed = 0; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0; S.lastPin = null;
-  S.trailStart = 0; S.cans = []; S.boostT = 0; S.boostReached = false; S.boostCount = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
+  S.trailStart = 0; S.boostT = 0; S.boostReached = false; S.boostCount = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
   $('score').textContent = '0'; $('score').classList.remove('boost'); setPalLabel();
   document.body.classList.remove('onstart'); $('hud').classList.remove('hidden'); $('start').classList.remove('show'); $('over').classList.remove('show');
   if (!store.get('inkswing.seen', false)) $('hint').classList.remove('hidden');
@@ -320,8 +321,7 @@ function step(dt) {
     S.maxX = Math.max(S.maxX, p.x);
     const sc = Math.floor((S.maxX - S.startX) / 120) + S.bonus;
     if (sc !== S.score) { S.score = sc; const e = $('score'); e.textContent = sc; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump');
-      if (sc >= 100 && !S.boostReached) boostUnlock();
-      const pi = Math.floor(sc / 10); if (pi !== S.palIdx) { if (sc < 100 || S.boostReached && sc % 100 >= 10) sfx.chime(); S.prevPal = S.palIdx; S.palIdx = pi; S.palT = 0; setPalLabel(); toast(pal().name.toUpperCase(), pal().cols[0]); splat(p.x, p.y, pal().cols[0], 1.3); } }
+      const pi = Math.floor(sc / 10); if (pi !== S.palIdx) { sfx.chime(); S.prevPal = S.palIdx; S.palIdx = pi; S.palT = 0; setPalLabel(); toast(pal().name.toUpperCase(), pal().cols[0]); splat(p.x, p.y, pal().cols[0], 1.3); } }
     genPins(S.pins.length + (S.pins[S.pins.length - 1].x < p.x + 2500 ? 4 : 0));
     const opening = S.grabs < 3;
     if (opening && p.y > WH + 120) { const pn = S.lastPin || S.pin || S.pins[0]; S.pin = pn; S.L = 200; p.x = pn.x; p.y = pn.y + 200; v.x = 160; v.y = 0; S.air = 0; S.last = null; pushTrail(true);
@@ -343,12 +343,13 @@ function step(dt) {
   if (open) { const tg = (S.pin ? S.pin.x : p.x) - viewW * .42; S.cam = lerp(S.cam, tg, Math.min(1, dt * 3)); S.cam = Math.min(Math.max(S.cam, p.x - viewW + 60), p.x - 60); }
   else { const target = p.x - viewW * .32; S.cam = Math.max(S.cam, lerp(S.cam, target, Math.min(1, dt * 6))); }
 }
-function boostUnlock() { S.boostReached = true; S.boostT = 2; toast('INK BOOST!', pal().cols[0]); sfx.boost(); S.shake = 18; vibrate([20, 30, 20, 30, 40]);
+function boostUnlock() { S.boostReached = true; S.boostT = Math.max(S.boostT, 2); toast('INK BOOST!', pal().cols[0]); sfx.boost(); S.shake = 18; vibrate([20, 30, 20, 30, 40]);
   for (let i = 0; i < 4; i++) splat(S.p.x + (Math.random() - .5) * 200, S.p.y + (Math.random() - .5) * 200, pal().cols[i % pal().cols.length], 1.4);
   const sb = $('score'); sb.classList.add('boost'); }
 function collect(cn) { cn.got = true; stamp(cn.x, cn.y, true); S.boostT = 2.6; S.boostCount++; const sp = Math.hypot(S.v.x, S.v.y) || 1;
   S.v.x = S.v.x / sp * Math.max(sp * 1.3, 1100) + 250; S.v.y = S.v.y / sp * Math.max(sp * 1.3, 1100) - 200;
-  toast('INK BOOST!', pal().cols[S.boostCount % pal().cols.length]); sfx.boost(); S.shake = 12; vibrate(30); splat(cn.x, cn.y, pal().cols[0], 1.5); }
+  if (!S.boostReached) { boostUnlock(); toast('FIRST INK BOOST!', pal().cols[0]); }
+  else toast('INK BOOST!', pal().cols[S.boostCount % pal().cols.length]); sfx.boost(); S.shake = 12; vibrate(30); splat(cn.x, cn.y, pal().cols[0], 1.5); }
 function die() { sfx.death(); swish(0, false); deathSplash();
   S.state = 'dead'; S.shake = 22; vibrate([30, 40, 60]);
   const key = (S.mode === 'daily' ? 'inkswing.best.daily.' + today() : 'inkswing.best') + (S.chill ? '.chill' : '');

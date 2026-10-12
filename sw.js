@@ -1,4 +1,4 @@
-const C = 'ink-swing-v16';
+const C = 'ink-swing-v17';
 const A = ['./', 'index.html', 'style.css', 'game.js', 'home-brush.js', 'manifest.webmanifest', 'fonts/ArchivoBlack-latin.woff2', 'icons/icon.svg', 'img/logo-B.webp', 'img/logo-B-halloween.webp', 'icons/icon-192.png', 'icons/icon-512.png',
   ...['splat-yt', 'pad', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish', 'silence'].map(n => `sfx/${n}.wav`)];
 self.addEventListener('install', e => e.waitUntil(caches.open(C).then(c => c.addAll(A)).then(() => self.skipWaiting())));
