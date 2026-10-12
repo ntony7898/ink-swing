@@ -25,7 +25,7 @@ addEventListener('resize', resize); resize();
 
 /* ---------- audio: pre-rendered WAVs (sfx/) via Web Audio, HTMLAudio fallback, robust iOS/Android unlock ---------- */
 const A = { ctx: null, muted: store.get('inkswing.muted', false) === true, buf: {}, html: {}, vol: .5 };
-const SFX = ['splat1', 'splat2', 'splat3', 'splat4', 'splat5', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish'];
+const SFX = ['splat-yt', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish'];
 function loadBuffers() { for (const n of SFX) fetch(`sfx/${n}.wav`).then(r => r.arrayBuffer()).then(ab => new Promise((ok, no) => {
   const p = A.ctx.decodeAudioData(ab, ok, no); if (p && p.then) p.then(ok, no); })).then(b => { A.buf[n] = b; if (n === 'swish') startSwish(); }).catch(() => {}); }
 for (const n of SFX) { const a = new Audio(`sfx/${n}.wav`); a.preload = 'auto'; A.html[n] = a; } // fallback players
@@ -59,7 +59,7 @@ function play(n, vol = 1, rate = 1, delay = 0) {
 }
 const rv = (a = .1) => 1 - a + Math.random() * 2 * a;
 const sfx = {
-  splat: (k = 1) => play('splat' + (1 + Math.floor(Math.random() * 5)), .6 * Math.min(1, .75 + .25 * k) * rv(.1), rv(.1)),
+  splat: (k = 1) => play('splat-yt', .6 * Math.min(1, .75 + .25 * k) * rv(.1), rv(.1)),
   death: () => { play('splash', .75, rv(.05)); if (Math.random() < .6) play(Math.random() < .5 ? 'drip1' : 'drip2', .25, rv(.12), 1.1 + Math.random() * .3); },
   chime: () => play('chime', .35), boost: () => play('boost', .4),
 };
