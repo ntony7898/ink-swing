@@ -80,7 +80,7 @@ function setMute(m) { A.muted = !!m; store.set('inkswing.muted', A.muted); const
 window.__audio = A;
 
 /* ---------- state ---------- */
-const S = { state: 'menu', mode: 'random', seed: 1 };
+const S = { state: 'menu', mode: 'random', seed: 1, chill: localStorage.getItem('inkswing.chill') === '1' };
 window.__is = S; // test hook
 function genPins(upTo) {
   while (S.pins.length < upTo) {
@@ -88,7 +88,7 @@ function genPins(upTo) {
     const gap = 215 + Math.min(175, i * 4) + r() * (50 + Math.min(130, i * 3));
     const vari = 110 + Math.min(300, i * 9);
     const y = Math.max(130, Math.min(600, 300 + (r() - .5) * vari));
-    S.pins.push({ x: last.x + gap, y }); genObstacle(i, last, gap, y);
+    S.pins.push({ x: last.x + gap, y }); genObstacle(i, last, gap, y); if (S.chill) { S.obs.length = 0; S.orbs.length = 0; } // same rng use keeps pin layout identical
     if (S.boostReached && Math.random() < .3) S.cans.push({ x: last.x + gap * (.4 + Math.random() * .2), y: Math.min(820, Math.max(last.y, y) + 120 + Math.random() * 220), got: false });
   }
 }
@@ -277,7 +277,7 @@ function candidate() { let best = null, bd = GRAB_R;
     const d = Math.hypot(pn.x - S.p.x, pn.y - S.p.y); if (d < bd && pn.y < S.p.y + 60) { bd = d; best = pn; } }
   return best; }
 function grab(pn) {
-  S.pin = pn; S.L = Math.hypot(S.p.x - pn.x, S.p.y - pn.y); S.grabs++;
+  S.pin = pn; S.L = Math.hypot(S.p.x - pn.x, S.p.y - pn.y); S.grabs++; if (S.chill) S.cur = (S.cur + 1) % NC;
   pushTrail(true);
   const near = S.lowY > WH - 170, clean = S.L < 250 && Math.abs(S.p.x - pn.x) < 170;
   let txt = null, add = 0;
@@ -345,7 +345,7 @@ function collect(cn) { cn.got = true; stamp(cn.x, cn.y, true); S.boostT = 2.6; S
   toast('INK BOOST!', pal().cols[S.boostCount % pal().cols.length]); sfx.boost(); S.shake = 12; vibrate(30); splat(cn.x, cn.y, pal().cols[0], 1.5); }
 function die() { sfx.death(); swish(0, false); deathSplash();
   S.state = 'dead'; S.shake = 22; vibrate([30, 40, 60]);
-  const key = S.mode === 'daily' ? 'inkswing.best.daily.' + today() : 'inkswing.best';
+  const key = (S.mode === 'daily' ? 'inkswing.best.daily.' + today() : 'inkswing.best') + (S.chill ? '.chill' : '');
   S.best = Math.max(store.get(key, 0), S.score); store.set(key, S.best);
   if (S.mode === 'random') $('bestStart').textContent = S.best;
   setTimeout(gameOver, 1250);
@@ -353,7 +353,7 @@ function die() { sfx.death(); swish(0, false); deathSplash();
 async function gameOver() {
   S.state = 'over';
   $('finalScore').textContent = S.score; $('overBest').textContent = `Best ${S.best}`;
-  $('overMode').textContent = S.mode === 'daily' ? `Daily seed · ${today()}` : 'Random run';
+  $('overMode').textContent = (S.chill ? 'Chill · ' : '') + (S.mode === 'daily' ? `Daily seed · ${today()}` : 'Random run');
   $('hud').classList.add('hidden'); $('hint').classList.add('hidden'); $('over').classList.add('show');
   $('posterPrev').removeAttribute('src');
   S.poster = await makePoster(); $('posterPrev').src = URL.createObjectURL(S.poster);
@@ -432,7 +432,7 @@ async function makePoster() {
   // header
   g.fillStyle = PC.ink; g.font = `190px ${F}`; g.textAlign = 'left'; g.fillText('INK', 54, 220); g.fillStyle = PC.acc; g.fillText('SWING', 54, 400); if (HW) { g.fillStyle = PC.ink; g.font = `34px ${F}`; g.fillText('HALLOWEEN EDITION', 60, 445); g.font = `190px ${F}`; }
   g.fillStyle = PC.ink; g.font = `bold 26px system-ui,sans-serif`; g.textAlign = 'right';
-  g.fillText(S.mode === 'daily' ? `DAILY ${today()}` : `RUN #${String(S.seed % 100000).padStart(5, '0')}`, Wp - 60, 90);
+  g.fillText((S.chill ? 'CHILL MODE · ' : 'OBSTACLE MODE · ') + (S.mode === 'daily' ? `DAILY ${today()}` : `RUN #${String(S.seed % 100000).padStart(5, '0')}`), Wp - 60, 90);
   g.fillText(`${S.grabs} GRABS · ${S.cleared} OBSTACLES CLEARED`, Wp - 60, 128); if (S.boostReached) { g.fillStyle = PC.acc; g.fillText(`★ INK BOOST REACHED${S.boostCount ? ` · ${S.boostCount} CANS` : ''}`, Wp - 60, 204); g.fillStyle = PC.ink; } g.fillText(PALETTES.slice(0, Math.min(4, S.palIdx + 1)).map(p => p.name.toUpperCase()).join(' / '), Wp - 60, 166);
   // art: the whole trail, wrapped into stacked strips like lines of text
   const ax = 60, ay = HW ? 480 : 450, aw = 960, ah = HW ? 1020 : 1050;
@@ -481,7 +481,8 @@ if (HW) { document.body.classList.add('hw'); document.querySelector('#over h2').
 $('btnTheme').textContent = HW ? 'Theme: Halloween 🎃 → Classic' : 'Theme: Classic → Halloween 🎃';
 $('btnTheme').onclick = () => { localStorage.setItem('inkswing.theme', HW ? 'classic' : 'halloween'); location.reload(); };
 $('btnMenu').onclick = () => { $('over').classList.remove('show'); $('start').classList.add('show'); S.state = 'menu'; };
-$('bestStart').textContent = store.get('inkswing.best', 0);
+const modeUI = () => { $('bestStart').textContent = store.get('inkswing.best' + (S.chill ? '.chill' : ''), 0); $('btnChill').textContent = S.chill ? 'Mode: Chill · no obstacles ⇄' : 'Mode: Obstacles ⇄ Chill'; $('btnChill').classList.toggle('on', S.chill); };
+$('btnChill').onclick = () => { S.chill = !S.chill; localStorage.setItem('inkswing.chill', S.chill ? '1' : '0'); modeUI(); }; modeUI();
 $('dailyTag').textContent = `${today().slice(0, 4)}·${today().slice(4, 6)}·${today().slice(6)} · same pins for everyone`;
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
