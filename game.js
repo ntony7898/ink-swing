@@ -95,7 +95,7 @@ function genPins(upTo) {
 function newRun(mode) {
   S.mode = mode; S.seed = mode === 'daily' ? +today() : (Math.random() * 1e9) | 0;
   S.rng = mulberry(S.seed);
-  S.obs = []; S.orbs = []; S.cur = 0; S.cleared = 0; S.cause = ''; S.pins = [{ x: 260, y: 300 }]; genPins(12);
+  S.obs = []; S.orbs = []; S.saves = 1; S.graceT = 0; S.cur = 0; S.cleared = 0; S.cause = ''; S.pins = [{ x: 260, y: 300 }]; genPins(12);
   S.p = { x: 120, y: 470 }; S.v = { x: 0, y: 0 };
   S.pin = S.pins[0]; S.L = Math.hypot(S.p.x - 260, S.p.y - 300);
   S.holding = true; S.startX = S.p.x; S.maxX = S.p.x; S.bonus = 0; S.score = 0; S.palIdx = 0; S.palT = 1; S.prevPal = 0;
@@ -155,28 +155,28 @@ function stamp(x, y, big, opt = {}) { const P = pal(), cs = P.cols, i = opt.ci ?
   const r = big ? 150 + Math.random() * 70 : 80 + Math.random() * 90, sh = big ? 'burst' : shapes[Math.floor(Math.random() * shapes.length)];
   paint({ t: 'k', x, y, r: opt.r || r, sh: opt.sh || sh, rot: opt.rot ?? (P.deco === 'swiss' ? 0 : (Math.random() - .5) * 1.2), c: cs[i], c2: shade(cs[(i + 1) % cs.length], .5), off: 4 + Math.random() * 5, bx0: x - (opt.r || r) - 12, bx1: x + (opt.r || r) + 12 }); }
 /* ---------- obstacles (Color Switch-style) ---------- */
-const BR = 10, TOL = 5, NC = 3, GATE_H = 170; // brush radius, generous tolerance, gameplay colors, gate block height
-function genObstacle(i, last, gap, y) { const r = S.rng; if (last.x < 1450 || r() > Math.min(.8, .42 + (i - 6) * .02)) return;
-  const spd = (.9 + Math.min(1.4, i * .025)) * (r() < .5 ? -1 : 1), x = last.x + gap * .58, kind = ['ring', 'cross', 'gate'][Math.floor(r() * 3)];
+const BR = 10, TOL = 12, NC = 3, GATE_H = 230; // brush radius, generous tolerance, gameplay colors, gate block height
+function genObstacle(i, last, gap, y) { const r = S.rng; if (last.x < 2500 || r() > Math.min(.4, .2 + (i - 10) * .01)) return;
+  const spd = (.55 + Math.min(.6, i * .01)) * (r() < .5 ? -1 : 1), x = last.x + gap * .58, kind = ['ring', 'cross', 'gate'][Math.floor(r() * 3)];
   const sh = [0, 1, 2].sort(() => r() - .5);
-  let o; if (kind === 'ring') { const R = Math.min(gap * .34, 115 + r() * 40); o = { kind, x, y: Math.min(WH - R - 50, (last.y + y) / 2 + 200 + r() * 80), R, th: 20, cs: [sh[0], sh[1], sh[2], sh[r() * 3 | 0]].slice(0, r() < .5 ? 3 : 4) }; }
-  else if (kind === 'cross') { const R = 120 + r() * 40, arms = r() < .4 ? 2 : 4; o = { kind, x, y: Math.min(WH - R - 40, (last.y + y) / 2 + 210 + r() * 70), R, th: 18, arms, cs: arms === 2 ? [sh[0], sh[1]] : [sh[0], sh[1], sh[2], sh[0]] }; }
+  let o; if (kind === 'ring') { const R = Math.min(gap * .34, 115 + r() * 40); o = { kind, x, y: Math.min(WH - R - 50, (last.y + y) / 2 + 200 + r() * 80), R, th: 20, cs: [sh[0], sh[1], sh[2], sh[r() * 3 | 0]].slice(0, (r(), 3)) }; }
+  else if (kind === 'cross') { const R = 120 + r() * 40, arms = r() < .65 ? 2 : 4; o = { kind, x, y: Math.min(WH - R - 40, (last.y + y) / 2 + 210 + r() * 70), R, th: 18, arms, cs: arms === 2 ? [sh[0], sh[1]] : [sh[0], sh[1], sh[2], sh[0]] }; }
   else o = { kind, x, y: WH / 2, R: 14, th: 26, cs: sh, off: r() * GATE_H * 3 };
   o.rot = r() * 6.28; o.spd = spd; o.st = 0; o.touched = false; S.obs.push(o);
-  S.orbs.push({ x: last.x + 30 + r() * 40, y: Math.min(WH - 120, last.y + 230 + r() * 60), ci: sh[r() * 3 | 0], got: false }); }
+  const ox = o.x - (kind === 'gate' ? 0 : o.R) - 75 - r() * 20; S.orbs.push({ x: ox, y: kind === 'gate' ? Math.min(WH - 120, last.y + 250) : o.y, ci: sh[r() * 3 | 0], got: false }); }
 function obsColorAt(o, p) { const dx = p.x - o.x, dy = p.y - o.y, hit = o.th / 2 + BR - TOL;
   if (o.kind === 'ring') { const d = Math.hypot(dx, dy); if (Math.abs(d - o.R) > hit) return -1; let a = (Math.atan2(dy, dx) - o.rot) % 6.2832; if (a < 0) a += 6.2832; return o.cs[Math.floor(a / (6.2832 / o.cs.length)) % o.cs.length]; }
   if (o.kind === 'cross') { for (let k = 0; k < o.arms; k++) { const a = o.rot + k * 6.2832 / o.arms, ex = Math.cos(a) * o.R, ey = Math.sin(a) * o.R, t = Math.max(0, Math.min(1, (dx * ex + dy * ey) / (o.R * o.R)));
       if (Math.hypot(dx - ex * t, dy - ey * t) < hit) return o.cs[k]; } return -1; }
   if (Math.abs(dx) > hit) return -1; const n = o.cs.length, m = (((p.y - o.off) % (GATE_H * n)) + GATE_H * n) % (GATE_H * n); return o.cs[Math.floor(m / GATE_H)]; }
-function stepObstacles(dt) { const p = S.p;
+function stepObstacles(dt) { const p = S.p; if (S.graceT > 0) S.graceT -= dt;
   for (const o of S.obs) { o.rot += o.spd * dt; if (o.kind === 'gate') o.off += o.spd * 90 * dt;
     if (o.st || o.x > p.x + 300 || o.x < p.x - 400) continue;
     const c = obsColorAt(o, p);
-    if (c >= 0) { if (S.boostT > 0) { smash(o); continue; } if (c !== S.cur) { S.cause = 'obstacle'; return die(); }
+    if (c >= 0) { if (S.boostT > 0) { smash(o); continue; } if (c !== S.cur) { if (S.graceT > 0) continue; if (S.saves > 0) { S.saves--; S.graceT = .7; splat(p.x, p.y, pal().cols[c], 1.2); S.shake = 10; sfx.splat(1); toast('CAREFUL! SAVE USED', pal().cols[c]); vibrate([15, 30, 15]); continue; } S.cause = 'obstacle'; return die(); }
       if (!o.touched) { o.touched = true; splat(p.x, p.y, color(), .7); sfx.splat(.6); } }
     if (p.x > o.x + (o.kind === 'gate' ? 30 : o.R + 30)) clearObs(o); }
-  for (const b of S.orbs) if (!b.got && Math.hypot(b.x - p.x, b.y - p.y) < 46) { b.got = true; S.cur = b.ci; splat(b.x, b.y, color(), .8); sfx.chime(); toast('NEW COLOR', color()); pushTrail(true); }
+  for (const b of S.orbs) if (!b.got && Math.hypot(b.x - p.x, b.y - p.y) < 66) { b.got = true; S.cur = b.ci; splat(b.x, b.y, color(), .8); sfx.chime(); toast('NEW COLOR', color()); pushTrail(true); }
 }
 function obsStamp(o) { const P = pal(), sh = o.kind === 'ring' ? 'ring' : o.kind === 'cross' ? (o.arms === 2 ? 'bar' : 'cross') : 'gate';
   stamp(o.x, o.kind === 'gate' ? S.p.y : o.y, false, { sh, r: o.kind === 'gate' ? 110 : o.R + 10, rot: o.kind === 'cross' ? o.rot : P.deco === 'swiss' ? 0 : o.rot * .2, ci: o.cs[0] }); }
