@@ -1,6 +1,6 @@
-const C = 'ink-swing-v9';
+const C = 'ink-swing-v10';
 const A = ['./', 'index.html', 'style.css', 'game.js', 'manifest.webmanifest', 'fonts/ArchivoBlack-latin.woff2', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
-  ...['splat-yt', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish', 'silence'].map(n => `sfx/${n}.wav`)];
+  ...['splat-yt', 'pad', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish', 'silence'].map(n => `sfx/${n}.wav`)];
 self.addEventListener('install', e => e.waitUntil(caches.open(C).then(c => c.addAll(A)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== C).map(x => caches.delete(x)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {

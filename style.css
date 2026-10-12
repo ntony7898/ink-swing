@@ -39,3 +39,17 @@ h2{margin:0;font:400 clamp(56px,17vw,96px)/.85 var(--H);letter-spacing:-.04em;co
 .link{background:none;border:0;font:14px var(--H);text-decoration:underline;color:var(--ink);cursor:pointer;padding:8px}
 #mute{position:fixed;z-index:5;top:calc(12px + env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:50%;border:3px solid var(--ink);background:var(--paper);font-size:18px;cursor:pointer;touch-action:manipulation}
 #score.boost{background:linear-gradient(90deg,#E63A2E,#F4C430,#2EC4B6,#FF48B0);-webkit-background-clip:text;background-clip:text;color:transparent;mix-blend-mode:normal}
+/* ---- Halloween theme ---- */
+body.hw{--paper:#120A1C;--ink:#F3E6CF;--red:#FF7A1A;--yel:#A04DFF;--blu:#7CFF3A;background:#120A1C}
+body.hw #score{mix-blend-mode:normal;text-shadow:0 0 24px rgba(255,122,26,.45)}
+body.hw #start{background:radial-gradient(circle at 76% 20%,#F3E6CF 0 13%,rgba(243,230,207,.18) 13.3%,transparent 26%),radial-gradient(120% 70% at 50% 110%,#3A1650 0,transparent 60%),#120A1C}
+body.hw h1 span{text-shadow:0 0 30px rgba(255,122,26,.35)}
+body.hw h1 span:last-child{color:#FF7A1A}
+body.hw h1::after{content:"";display:block;height:40px;margin:-10px 6% 0;background:linear-gradient(#FF7A1A,#FF7A1A) 12% 0/8px 26px no-repeat,linear-gradient(#FF7A1A,#FF7A1A) 44% 0/6px 16px no-repeat,linear-gradient(#FF7A1A,#FF7A1A) 71% 0/9px 32px no-repeat,linear-gradient(#FF7A1A,#FF7A1A) 90% 0/5px 12px no-repeat;border-radius:0 0 8px 8px;filter:drop-shadow(0 0 10px rgba(255,122,26,.4))}
+body.hw .btn{box-shadow:6px 6px 0 #FF7A1A}body.hw .btn.alt{box-shadow:6px 6px 0 #A04DFF}
+body.hw #over{background:rgba(18,10,28,.9)}
+body.hw h2{color:#FF7A1A;text-shadow:0 0 28px rgba(255,122,26,.5)}
+body.hw .kicker{background:#FF7A1A;color:#120A1C}
+body.hw #posterPrev{box-shadow:8px 8px 0 #FF7A1A;border-color:#F3E6CF}
+body.hw #mute{background:#120A1C;color:#F3E6CF;border-color:#F3E6CF}
+body.hw .pill{color:#120A1C}
