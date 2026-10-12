@@ -23,6 +23,31 @@ function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = innerWi
   cv.width = W * DPR; cv.height = H * DPR; scale = H / WH; viewW = W / scale; }
 addEventListener('resize', resize); resize();
 
+/* ---------- audio (synthesized Web Audio) ---------- */
+const A = { ctx: null, muted: store.get('inkswing.muted', false) };
+function audioInit() { if (A.ctx) { if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  const c = A.ctx = new AC(); A.master = c.createGain(); A.master.gain.value = A.muted ? 0 : .55; A.master.connect(c.destination);
+  const len = c.sampleRate; A.noise = c.createBuffer(1, len, c.sampleRate); const d = A.noise.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource(); src.buffer = A.noise; src.loop = true; A.swF = c.createBiquadFilter(); A.swF.type = 'bandpass'; A.swF.Q.value = .8;
+  A.swG = c.createGain(); A.swG.gain.value = 0; src.connect(A.swF).connect(A.swG).connect(A.master); src.start(); }
+function env(g, t, a, peak, dec) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec); }
+function noiseHit(f0, f1, peak, dec, delay = 0) { const c = A.ctx; if (!c) return; const t = c.currentTime + delay, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+  s.buffer = A.noise; fl.type = 'lowpass'; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + dec); env(g, t, .005, peak, dec);
+  s.connect(fl).connect(g).connect(A.master); s.start(t, Math.random() * .5); s.stop(t + dec + .05); }
+function tone(f0, f1, peak, dec, delay = 0, type = 'sine') { const c = A.ctx; if (!c) return; const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dec); env(g, t, .008, peak, dec); o.connect(g).connect(A.master); o.start(t); o.stop(t + dec + .05); }
+const sfx = {
+  splat: (k = 1) => { noiseHit(2200, 260, .32 * k, .2); tone(150, 55, .25 * k, .16); },
+  death: () => { noiseHit(3000, 200, .4, .45); [0, .18, .34, .52].forEach((d, i) => tone(900 - i * 120, 300 - i * 40, .12, .12, d + .1)); },
+  chime: () => [523.25, 659.25, 783.99].forEach((f, i) => { tone(f, f, .09, .7, i * .06, 'triangle'); tone(f * 2, f * 2, .03, .5, i * .06); }),
+  boost: () => { [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, f * 1.01, .1, .45, i * .05, 'triangle')); noiseHit(5000, 800, .12, .5); },
+};
+function swish(speed, on) { if (!A.ctx) return; const t = A.ctx.currentTime, k = on ? Math.min(1, speed / 1700) : 0;
+  A.swG.gain.setTargetAtTime(k * k * .07, t, .08); A.swF.frequency.setTargetAtTime(300 + speed * 1.3, t, .08); }
+function setMute(m) { A.muted = m; store.set('inkswing.muted', m); const b = document.getElementById('mute'); b.textContent = m ? '🔇' : '🔊'; b.setAttribute('aria-pressed', m);
+  if (A.master) A.master.gain.setTargetAtTime(m ? 0 : .55, A.ctx.currentTime, .05); }
+
 /* ---------- state ---------- */
 const S = { state: 'menu', mode: 'random', seed: 1 };
 window.__is = S; // test hook
@@ -33,6 +58,7 @@ function genPins(upTo) {
     const vari = 110 + Math.min(300, i * 9);
     const y = Math.max(130, Math.min(600, 300 + (r() - .5) * vari));
     S.pins.push({ x: last.x + gap, y });
+    if (S.boostReached && Math.random() < .3) S.cans.push({ x: last.x + gap * (.4 + Math.random() * .2), y: Math.min(820, Math.max(last.y, y) + 120 + Math.random() * 220), got: false });
   }
 }
 function newRun(mode) {
@@ -43,8 +69,8 @@ function newRun(mode) {
   S.pin = S.pins[0]; S.L = Math.hypot(S.p.x - 260, S.p.y - 300);
   S.holding = true; S.startX = S.p.x; S.maxX = S.p.x; S.bonus = 0; S.score = 0; S.palIdx = 0; S.palT = 1; S.prevPal = 0;
   S.colIdx = 0; S.trail = []; S.splats = []; S.parts = []; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0;
-  S.trailStart = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
-  $('score').textContent = '0'; setPalLabel();
+  S.trailStart = 0; S.cans = []; S.boostT = 0; S.boostReached = false; S.boostCount = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
+  $('score').textContent = '0'; $('score').classList.remove('boost'); setPalLabel();
   $('hud').classList.remove('hidden'); $('start').classList.remove('show'); $('over').classList.remove('show');
   if (!store.get('inkswing.seen', false)) $('hint').classList.remove('hidden');
   pushTrail(true);
@@ -56,7 +82,8 @@ function toast(t, c) { const e = $('toast'); e.textContent = t; e.style.color = 
 function pushTrail(force) {
   const p = S.p, last = S.trail[S.trail.length - 1], sp = Math.hypot(S.v.x, S.v.y);
   if (!force && last && Math.hypot(p.x - last.x, p.y - last.y) < 5) return;
-  S.trail.push({ x: p.x, y: p.y, c: color(), w: Math.max(9, Math.min(30, 8 + sp / 55)), b: !!pal().blend, brk: !!force });
+  const bo = S.boostT > 0, cs = pal().cols;
+  S.trail.push({ x: p.x, y: p.y, c: bo ? cs[Math.floor(S.t * 14) % cs.length] : color(), w: Math.max(9, Math.min(30, 8 + sp / 55)) * (bo ? 1.7 : 1), b: !!pal().blend, brk: !!force, g: bo });
 }
 
 /* ---------- input ---------- */
@@ -66,10 +93,10 @@ function release() { if (S.state !== 'play') return; S.holding = false;
 S.press = press; S.release = release;
 const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 const isUI = e => e.target.closest && e.target.closest('button,.panel.show');
-addEventListener('pointerdown', e => { if (!isUI(e)) { e.preventDefault(); press(); } }, { passive: false });
+addEventListener('pointerdown', e => { audioInit(); if (!isUI(e)) { e.preventDefault(); press(); } }, { passive: false });
 addEventListener('pointerup', e => { if (!isUI(e)) release(); });
 addEventListener('pointercancel', release);
-addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); if (!e.repeat) { if (S.state === 'over') return newRun(S.mode); press(); } } });
+addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { audioInit(); e.preventDefault(); if (!e.repeat) { if (S.state === 'over') return newRun(S.mode); press(); } } });
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); });
 addEventListener('contextmenu', e => e.preventDefault());
 
@@ -85,7 +112,7 @@ function grab(pn) {
   let txt = null, add = 0;
   if (near) { add = 3; txt = 'CLOSE CALL +3'; } else if (clean) { add = 1; txt = 'CLEAN +1'; }
   if (add) { S.bonus += add; toast(txt, color()); }
-  splat(S.p.x, S.p.y, color(), near ? 1.6 : 1); S.shake = near ? 14 : 7; vibrate(near ? 25 : 12);
+  splat(S.p.x, S.p.y, color(), near ? 1.6 : 1); S.shake = near ? 14 : 7; sfx.splat(near ? 1.3 : 1); vibrate(near ? 25 : 12);
   if (S.grabs === 2) { store.set('inkswing.seen', true); $('hint').classList.add('hidden'); }
 }
 function splat(x, y, c, k = 1) {
@@ -99,11 +126,13 @@ function step(dt) {
     if (!S.pin && S.holding && S.started) { const c = candidate(); if (c) grab(c); }
     v.y += G * dt;
     if (S.pin) { const dx = p.x - S.pin.x, dy = p.y - S.pin.y, r = Math.hypot(dx, dy) || 1, tx = -dy / r, ty = dx / r, vt = v.x * tx + v.y * ty;
-      if (dy > 0) { const s = Math.sign(vt) || 1; v.x += tx * s * PUMP * dt; v.y += ty * s * PUMP * dt; }
+      if (dy > 0) { const s = Math.sign(vt) || 1; const pm = S.boostT > 0 ? 2 : 1; v.x += tx * s * PUMP * pm * dt; v.y += ty * s * PUMP * pm * dt; }
       if (S.L > 230) S.L -= 90 * dt; // reel in a little: tighter, faster swings
     } else { S.air += dt; S.lowY = Math.max(S.lowY, p.y); }
     v.x *= .9995; v.y *= .9995;
-    const sp = Math.hypot(v.x, v.y); if (sp > MAXV) { v.x *= MAXV / sp; v.y *= MAXV / sp; }
+    const mv = S.boostT > 0 ? 2300 : MAXV, sp = Math.hypot(v.x, v.y); if (sp > mv) { v.x *= mv / sp; v.y *= mv / sp; }
+    if (S.boostT > 0) S.boostT -= dt;
+    for (const cn of S.cans) if (!cn.got && Math.hypot(cn.x - p.x, cn.y - p.y) < 70) collect(cn);
     p.x += v.x * dt; p.y += v.y * dt;
     if (S.pin) { const dx = p.x - S.pin.x, dy = p.y - S.pin.y, r = Math.hypot(dx, dy);
       if (r > S.L) { const nx = dx / r, ny = dy / r; p.x = S.pin.x + nx * S.L; p.y = S.pin.y + ny * S.L; const vr = v.x * nx + v.y * ny; if (vr > 0) { v.x -= nx * vr; v.y -= ny * vr; } } }
@@ -112,7 +141,8 @@ function step(dt) {
     S.maxX = Math.max(S.maxX, p.x);
     const sc = Math.floor((S.maxX - S.startX) / 120) + S.bonus;
     if (sc !== S.score) { S.score = sc; const e = $('score'); e.textContent = sc; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump');
-      const pi = Math.floor(sc / 10); if (pi !== S.palIdx) { S.prevPal = S.palIdx; S.palIdx = pi; S.palT = 0; setPalLabel(); toast(pal().name.toUpperCase(), pal().cols[0]); splat(p.x, p.y, pal().cols[0], 1.3); } }
+      if (sc >= 100 && !S.boostReached) boostUnlock();
+      const pi = Math.floor(sc / 10); if (pi !== S.palIdx) { if (sc < 100 || S.boostReached && sc % 100 >= 10) sfx.chime(); S.prevPal = S.palIdx; S.palIdx = pi; S.palT = 0; setPalLabel(); toast(pal().name.toUpperCase(), pal().cols[0]); splat(p.x, p.y, pal().cols[0], 1.3); } }
     genPins(S.pins.length + (S.pins[S.pins.length - 1].x < p.x + 2500 ? 4 : 0));
     if (p.y > WH + 120 || p.x < S.cam - 120) die();
   }
@@ -122,7 +152,13 @@ function step(dt) {
   S.shake *= Math.pow(.02, dt);
   const target = p.x - viewW * .32; S.cam = Math.max(S.cam, lerp(S.cam, target, Math.min(1, dt * 6)));
 }
-function die() {
+function boostUnlock() { S.boostReached = true; S.boostT = 2; toast('INK BOOST!', pal().cols[0]); sfx.boost(); S.shake = 18; vibrate([20, 30, 20, 30, 40]);
+  for (let i = 0; i < 4; i++) splat(S.p.x + (Math.random() - .5) * 200, S.p.y + (Math.random() - .5) * 200, pal().cols[i % pal().cols.length], 1.4);
+  const sb = $('score'); sb.classList.add('boost'); }
+function collect(cn) { cn.got = true; S.boostT = 2.6; S.boostCount++; const sp = Math.hypot(S.v.x, S.v.y) || 1;
+  S.v.x = S.v.x / sp * Math.max(sp * 1.3, 1100) + 250; S.v.y = S.v.y / sp * Math.max(sp * 1.3, 1100) - 200;
+  toast('INK BOOST!', pal().cols[S.boostCount % pal().cols.length]); sfx.boost(); S.shake = 12; vibrate(30); splat(cn.x, cn.y, pal().cols[0], 1.5); }
+function die() { sfx.death(); swish(0, false);
   S.state = 'dead'; S.shake = 22; vibrate([30, 40, 60]);
   const key = S.mode === 'daily' ? 'inkswing.best.daily.' + today() : 'inkswing.best';
   S.best = Math.max(store.get(key, 0), S.score); store.set(key, S.best);
@@ -149,8 +185,9 @@ function drawTrail(g, pts, from, x0, x1, wk = 1) {
   for (let i = Math.max(1, from); i < pts.length; i++) { const a = pts[i - 1], b = pts[i];
     if (b.brk && i > 1 && a.c !== b.c) continue;
     if (x1 !== undefined && (Math.max(a.x, b.x) < x0 - 40 || Math.min(a.x, b.x) > x1 + 40)) continue;
-    g.globalCompositeOperation = b.b ? 'multiply' : 'source-over';
-    g.strokeStyle = b.c; g.lineWidth = b.w * wk; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+    g.globalCompositeOperation = b.b && !b.g ? 'multiply' : 'source-over';
+    g.strokeStyle = b.c; g.lineWidth = b.w * wk; g.shadowColor = b.c; g.shadowBlur = b.g ? 24 : 0; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+  g.shadowBlur = 0;
   g.globalCompositeOperation = 'source-over';
 }
 function drawDeco(g, x0, x1, P, alpha) { // parallax design-movement motifs
@@ -188,6 +225,11 @@ function render() {
   for (const pn of S.pins) { if (pn.x < x0 - 40 || pn.x > x1 + 40) continue;
     if (pn === cand) { g.strokeStyle = P.cols[0]; g.lineWidth = 4; g.setLineDash([10, 8]); g.lineDashOffset = -S.t * 40; g.beginPath(); g.arc(pn.x, pn.y, 30 + Math.sin(S.t * 10) * 3, 0, 6.28); g.stroke(); g.setLineDash([]); }
     g.fillStyle = P.ink; g.beginPath(); g.arc(pn.x, pn.y, PIN_R, 0, 6.28); g.fill(); g.fillStyle = P.bg; g.beginPath(); g.arc(pn.x, pn.y, 4, 0, 6.28); g.fill(); }
+  for (const cn of S.cans) { if (cn.got || cn.x < x0 - 60 || cn.x > x1 + 60) continue; const by = cn.y + Math.sin(S.t * 4 + cn.x) * 8, cs = P.cols;
+    g.save(); g.translate(cn.x, by); g.rotate(Math.sin(S.t * 3 + cn.x) * .15); g.shadowColor = cs[0]; g.shadowBlur = 26 + Math.sin(S.t * 8) * 8;
+    g.fillStyle = P.ink; g.fillRect(-24, -30, 48, 60); g.shadowBlur = 0; for (let k = 0; k < 3; k++) { g.fillStyle = cs[k % cs.length]; g.fillRect(-24, -14 + k * 10, 48, 10); }
+    g.fillStyle = '#C9C9C9'; g.fillRect(-26, -34, 52, 8); g.strokeStyle = P.ink; g.lineWidth = 4; g.beginPath(); g.arc(0, -36, 16, Math.PI, 0); g.stroke();
+    g.fillStyle = cs[0]; g.beginPath(); g.ellipse(14, -34, 9, 5, 0, 0, 6.28); g.fill(); g.restore(); }
   // rope
   const p = S.p;
   if (S.pin && S.state !== 'over') { g.strokeStyle = P.ink; g.lineWidth = 4; g.beginPath(); g.moveTo(S.pin.x, S.pin.y); g.lineTo(p.x, p.y); g.stroke(); }
@@ -214,7 +256,7 @@ async function makePoster() {
   g.fillStyle = '#141414'; g.font = `190px ${F}`; g.textAlign = 'left'; g.fillText('INK', 54, 220); g.fillStyle = '#E63A2E'; g.fillText('SWING', 54, 400);
   g.fillStyle = '#141414'; g.font = `bold 26px system-ui,sans-serif`; g.textAlign = 'right';
   g.fillText(S.mode === 'daily' ? `DAILY ${today()}` : `RUN #${String(S.seed % 100000).padStart(5, '0')}`, Wp - 60, 90);
-  g.fillText(`${S.grabs} GRABS`, Wp - 60, 128); g.fillText(PALETTES.slice(0, Math.min(4, S.palIdx + 1)).map(p => p.name.toUpperCase()).join(' / '), Wp - 60, 166);
+  g.fillText(`${S.grabs} GRABS`, Wp - 60, 128); if (S.boostReached) { g.fillStyle = '#E63A2E'; g.fillText(`★ INK BOOST REACHED${S.boostCount ? ` · ${S.boostCount} CANS` : ''}`, Wp - 60, 204); g.fillStyle = '#141414'; } g.fillText(PALETTES.slice(0, Math.min(4, S.palIdx + 1)).map(p => p.name.toUpperCase()).join(' / '), Wp - 60, 166);
   // art: the whole trail, wrapped into stacked strips like lines of text
   const ax = 60, ay = 450, aw = 960, ah = 1050;
   g.fillStyle = '#FFFFFF'; g.fillRect(ax, ay, aw, ah);
@@ -247,12 +289,14 @@ async function share() {
 let last = performance.now(), acc = 0;
 function frame(now) { const dt = Math.min(.05, (now - last) / 1000); last = now;
   if (S.pins) { acc += dt; while (acc >= STEP) { step(STEP); acc -= STEP; } }
+  if (S.pins) swish(Math.hypot(S.v.x, S.v.y), S.state === 'play' && S.started);
   render(); requestAnimationFrame(frame); }
 requestAnimationFrame(frame);
 $('btnRandom').onclick = () => newRun('random');
 $('btnDaily').onclick = () => newRun('daily');
 $('btnRetry').onclick = () => newRun(S.mode);
 $('btnShare').onclick = share;
+$('mute').onclick = () => setMute(!A.muted); setMute(A.muted);
 $('btnMenu').onclick = () => { $('over').classList.remove('show'); $('start').classList.add('show'); S.state = 'menu'; };
 $('bestStart').textContent = store.get('inkswing.best', 0);
 $('dailyTag').textContent = `${today().slice(0, 4)}·${today().slice(4, 6)}·${today().slice(6)} · same pins for everyone`;
