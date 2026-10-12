@@ -24,8 +24,8 @@ function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = innerWi
 addEventListener('resize', resize); resize();
 
 /* ---------- audio: pre-rendered WAVs (sfx/) via Web Audio, HTMLAudio fallback, robust iOS/Android unlock ---------- */
-const A = { ctx: null, muted: store.get('inkswing.muted', false) === true, buf: {}, html: {}, vol: .8 };
-const SFX = ['splat1', 'splat2', 'splat3', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish'];
+const A = { ctx: null, muted: store.get('inkswing.muted', false) === true, buf: {}, html: {}, vol: .5 };
+const SFX = ['splat1', 'splat2', 'splat3', 'splat4', 'splat5', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish'];
 function loadBuffers() { for (const n of SFX) fetch(`sfx/${n}.wav`).then(r => r.arrayBuffer()).then(ab => new Promise((ok, no) => {
   const p = A.ctx.decodeAudioData(ab, ok, no); if (p && p.then) p.then(ok, no); })).then(b => { A.buf[n] = b; if (n === 'swish') startSwish(); }).catch(() => {}); }
 for (const n of SFX) { const a = new Audio(`sfx/${n}.wav`); a.preload = 'auto'; A.html[n] = a; } // fallback players
@@ -59,13 +59,13 @@ function play(n, vol = 1, rate = 1, delay = 0) {
 }
 const rv = (a = .1) => 1 - a + Math.random() * 2 * a;
 const sfx = {
-  splat: (k = 1) => play('splat' + (1 + Math.floor(Math.random() * 3)), .75 * k * rv(.1), rv(.08)),
-  death: () => { play('splash', 1, rv(.05)); const n = 4 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) play(Math.random() < .5 ? 'drip1' : 'drip2', .45 * rv(.3), rv(.25), .3 + i * .16 + Math.random() * .14); },
-  chime: () => play('chime', .55), boost: () => play('boost', .65),
+  splat: (k = 1) => play('splat' + (1 + Math.floor(Math.random() * 5)), .6 * Math.min(1, .75 + .25 * k) * rv(.1), rv(.1)),
+  death: () => { play('splash', .75, rv(.05)); if (Math.random() < .6) play(Math.random() < .5 ? 'drip1' : 'drip2', .25, rv(.12), 1.1 + Math.random() * .3); },
+  chime: () => play('chime', .35), boost: () => play('boost', .4),
 };
 function startSwish() { if (!A.ctx || A.swSrc || !A.buf.swish) return; const s = A.swSrc = A.ctx.createBufferSource(); s.buffer = A.buf.swish; s.loop = true; s.connect(A.swF); s.start(); }
 function swish(speed, on) { if (!live() || !A.swSrc) return; const t = A.ctx.currentTime, k = on ? Math.min(1, speed / 1700) : 0;
-  A.swG.gain.setTargetAtTime(k * k * .5, t, .09); A.swF.frequency.setTargetAtTime(350 + speed * 1.1, t, .09); A.swSrc.playbackRate.setTargetAtTime(.85 + k * .35, t, .1); }
+  A.swG.gain.setTargetAtTime(k * k * .3, t, .12); A.swF.frequency.setTargetAtTime(350 + speed * 1.1, t, .09); A.swSrc.playbackRate.setTargetAtTime(.85 + k * .35, t, .1); }
 function setMute(m) { A.muted = !!m; store.set('inkswing.muted', A.muted); const b = document.getElementById('mute'); b.textContent = A.muted ? '🔇' : '🔊'; b.setAttribute('aria-pressed', A.muted);
   if (A.master) A.master.gain.setTargetAtTime(A.muted ? 0 : A.vol, A.ctx.currentTime, .03); if (A.tag && A.muted) A.tag.pause(); }
 window.__audio = A;
