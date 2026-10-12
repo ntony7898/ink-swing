@@ -82,6 +82,7 @@ window.__audio = A;
 /* ---------- state ---------- */
 const S = { state: 'menu', mode: 'random', seed: 1, chill: localStorage.getItem('inkswing.chill') === '1' };
 window.__is = S; // test hook
+window.InkPaint = { drawSeg, drawDrip, shade, hexRgb, pal: () => pal() || PALETTES[0] }; // shared with home-brush.js (home-screen brush uses the game paint engine)
 function genPins(upTo) {
   while (S.pins.length < upTo) {
     const i = S.pins.length, last = S.pins[i - 1], r = S.rng;
@@ -99,7 +100,7 @@ function newRun(mode) {
   S.p = { x: 120, y: 470 }; S.v = { x: 0, y: 0 };
   S.pin = S.pins[0]; S.L = Math.hypot(S.p.x - 260, S.p.y - 300);
   S.holding = true; S.startX = S.p.x; S.maxX = S.p.x; S.bonus = 0; S.score = 0; S.palIdx = 0; S.palT = 1; S.prevPal = 0;
-  S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.sid = 0; S.poolT = 0; S.last = null; S.passed = 0; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0;
+  S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.sid = 0; S.poolT = 0; S.last = null; S.passed = 0; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0; S.lastPin = null;
   S.trailStart = 0; S.cans = []; S.boostT = 0; S.boostReached = false; S.boostCount = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
   $('score').textContent = '0'; $('score').classList.remove('boost'); setPalLabel();
   document.body.classList.remove('onstart'); $('hud').classList.remove('hidden'); $('start').classList.remove('show'); $('over').classList.remove('show');
@@ -277,7 +278,7 @@ function candidate() { let best = null, bd = GRAB_R;
     const d = Math.hypot(pn.x - S.p.x, pn.y - S.p.y); if (d < bd && pn.y < S.p.y + 60) { bd = d; best = pn; } }
   return best; }
 function grab(pn) {
-  S.pin = pn; S.L = Math.hypot(S.p.x - pn.x, S.p.y - pn.y); S.grabs++; if (S.chill) S.cur = (S.cur + 1) % NC;
+  S.pin = pn; S.lastPin = pn; S.L = Math.hypot(S.p.x - pn.x, S.p.y - pn.y); S.grabs++; if (S.chill) S.cur = (S.cur + 1) % NC;
   pushTrail(true);
   const near = S.lowY > WH - 170, clean = S.L < 250 && Math.abs(S.p.x - pn.x) < 170;
   let txt = null, add = 0;
@@ -322,7 +323,10 @@ function step(dt) {
       if (sc >= 100 && !S.boostReached) boostUnlock();
       const pi = Math.floor(sc / 10); if (pi !== S.palIdx) { if (sc < 100 || S.boostReached && sc % 100 >= 10) sfx.chime(); S.prevPal = S.palIdx; S.palIdx = pi; S.palT = 0; setPalLabel(); toast(pal().name.toUpperCase(), pal().cols[0]); splat(p.x, p.y, pal().cols[0], 1.3); } }
     genPins(S.pins.length + (S.pins[S.pins.length - 1].x < p.x + 2500 ? 4 : 0));
-    if (p.y > WH + 120 || p.x < S.cam - 120) die();
+    const opening = S.grabs < 3;
+    if (opening && p.y > WH + 120) { const pn = S.lastPin || S.pin || S.pins[0]; S.pin = pn; S.L = 200; p.x = pn.x; p.y = pn.y + 200; v.x = 160; v.y = 0; S.air = 0; S.last = null; pushTrail(true);
+      splat(p.x, p.y, pal().cols[0], .8); toast('TRY AGAIN', pal().cols[0]); vibrate(10); }
+    else if (p.y > WH + 120 || (!opening && p.x < S.cam - 120)) die();
   }
   S.palT = Math.min(1, S.palT + dt * 1.5);
   for (const q of S.parts) { q.vy += G * .7 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt;
@@ -335,7 +339,9 @@ function step(dt) {
     paint({ t: 'p', x: S.p.x, y: S.p.y, r: S.last.w * .62, c, dk: shade(c, -.4), m: !!pal().blend, bx0: S.p.x - 30, bx1: S.p.x + 30 }); }
 
   S.shake *= Math.pow(.02, dt);
-  const target = p.x - viewW * .32; S.cam = Math.max(S.cam, lerp(S.cam, target, Math.min(1, dt * 6)));
+  const open = S.state === 'play' && S.grabs < 3;
+  if (open) { const tg = (S.pin ? S.pin.x : p.x) - viewW * .42; S.cam = lerp(S.cam, tg, Math.min(1, dt * 3)); S.cam = Math.min(Math.max(S.cam, p.x - viewW + 60), p.x - 60); }
+  else { const target = p.x - viewW * .32; S.cam = Math.max(S.cam, lerp(S.cam, target, Math.min(1, dt * 6))); }
 }
 function boostUnlock() { S.boostReached = true; S.boostT = 2; toast('INK BOOST!', pal().cols[0]); sfx.boost(); S.shake = 18; vibrate([20, 30, 20, 30, 40]);
   for (let i = 0; i < 4; i++) splat(S.p.x + (Math.random() - .5) * 200, S.p.y + (Math.random() - .5) * 200, pal().cols[i % pal().cols.length], 1.4);
@@ -477,7 +483,7 @@ $('btnDaily').onclick = () => newRun('daily');
 $('btnRetry').onclick = () => newRun(S.mode);
 $('btnShare').onclick = share;
 $('mute').onclick = () => setMute(!A.muted); setMute(A.muted);
-if (HW) { document.body.classList.add('hw'); document.querySelector('#over h2').innerHTML = 'BOO!<br>INKED OUT'; (document.querySelector('.sub')||{}).textContent = 'Halloween Edition · Swing. Release. Paint the night.'; }
+if (HW) { document.body.classList.add('hw'); document.querySelector('.hb-logo img').src = 'img/logo-B-halloween.webp'; document.querySelector('#over h2').innerHTML = 'BOO!<br>INKED OUT'; (document.querySelector('.sub')||{}).textContent = 'Halloween Edition · Swing. Release. Paint the night.'; }
 $('btnTheme').innerHTML = HW ? '🎃 <b>HALLOWEEN</b> EDITION' : '🎨 <b>CLASSIC</b> EDITION'; $('btnTheme').title = 'Switch to ' + (HW ? 'Classic' : 'Halloween');
 $('btnTheme').onclick = () => { localStorage.setItem('inkswing.theme', HW ? 'classic' : 'halloween'); location.reload(); };
 document.body.classList.add('onstart');
