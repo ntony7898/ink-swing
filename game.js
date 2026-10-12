@@ -23,43 +23,52 @@ function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); W = innerWi
   cv.width = W * DPR; cv.height = H * DPR; scale = H / WH; viewW = W / scale; }
 addEventListener('resize', resize); resize();
 
-/* ---------- audio (synthesized Web Audio) ---------- */
-const A = { ctx: null, muted: store.get('inkswing.muted', false) };
-function audioInit() { if (A.ctx) { if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
-  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  const c = A.ctx = new AC(); A.master = c.createGain(); A.master.gain.value = A.muted ? 0 : .55;
-  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000; const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4;
-  A.master.connect(lp).connect(comp).connect(c.destination);
-  const len = c.sampleRate * 2; A.noise = c.createBuffer(1, len, c.sampleRate); const d = A.noise.getChannelData(0); let pink = 0;
-  for (let i = 0; i < len; i++) { pink = pink * .9 + (Math.random() * 2 - 1) * .1; d[i] = (Math.random() * 2 - 1) * .5 + pink * 3; }
-  const loop = rate => { const s = c.createBufferSource(); s.buffer = A.noise; s.loop = true; s.playbackRate.value = rate; s.start(); return s; };
-  A.swF = c.createBiquadFilter(); A.swF.type = 'bandpass'; A.swF.Q.value = 1.1; A.swG = c.createGain(); A.swG.gain.value = 0; loop(1).connect(A.swF).connect(A.swG).connect(A.master);
-  A.brF = c.createBiquadFilter(); A.brF.type = 'highpass'; A.brF.frequency.value = 2400; A.brG = c.createGain(); A.brG.gain.value = 0;
-  A.lfo = c.createOscillator(); A.lfo.frequency.value = 10; A.lfoG = c.createGain(); A.lfoG.gain.value = 0; A.lfo.connect(A.lfoG).connect(A.brG.gain); A.lfo.start();
-  loop(.73).connect(A.brF).connect(A.brG).connect(A.master); }
-function env(g, t, a, peak, dec) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec); }
-function noiseHit(f0, f1, peak, dec, delay = 0, type = 'lowpass', Q = 1) { const c = A.ctx; if (!c) return; const t = c.currentTime + delay, s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
-  s.buffer = A.noise; fl.type = type; fl.Q.value = Q; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + dec); env(g, t, .005, peak, dec);
-  s.connect(fl).connect(g).connect(A.master); s.start(t, Math.random() * .5); s.stop(t + dec + .05); }
-function tone(f0, f1, peak, dec, delay = 0, type = 'sine') { const c = A.ctx; if (!c) return; const t = c.currentTime + delay, o = c.createOscillator(), g = c.createGain();
-  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dec); env(g, t, .008, peak, dec); o.connect(g).connect(A.master); o.start(t); o.stop(t + dec + .05); }
+/* ---------- audio: pre-rendered WAVs (sfx/) via Web Audio, HTMLAudio fallback, robust iOS/Android unlock ---------- */
+const A = { ctx: null, muted: store.get('inkswing.muted', false) === true, buf: {}, html: {}, vol: .8 };
+const SFX = ['splat1', 'splat2', 'splat3', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish'];
+function loadBuffers() { for (const n of SFX) fetch(`sfx/${n}.wav`).then(r => r.arrayBuffer()).then(ab => new Promise((ok, no) => {
+  const p = A.ctx.decodeAudioData(ab, ok, no); if (p && p.then) p.then(ok, no); })).then(b => { A.buf[n] = b; if (n === 'swish') startSwish(); }).catch(() => {}); }
+for (const n of SFX) { const a = new Audio(`sfx/${n}.wav`); a.preload = 'auto'; A.html[n] = a; } // fallback players
+function unlock() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}   // iOS 17+: ignore silent switch
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!A.ctx && AC) { try {
+    const c = A.ctx = new AC(); A.master = c.createGain(); A.master.gain.value = A.muted ? 0 : A.vol;
+    A.an = c.createAnalyser(); A.an.fftSize = 2048; A.master.connect(A.an); A.an.connect(c.destination);
+    A.swF = c.createBiquadFilter(); A.swF.type = 'bandpass'; A.swF.Q.value = .7; A.swF.frequency.value = 900; A.swG = c.createGain(); A.swG.gain.value = 0; A.swF.connect(A.swG).connect(A.master);
+    c.onstatechange = () => { A.state = c.state; };
+    loadBuffers();
+  } catch (e) { A.ctx = null; } }
+  if (A.ctx) {
+    if (A.ctx.state !== 'running') { try { const p = A.ctx.resume(); p && p.catch && p.catch(() => {}); } catch {} } // also covers iOS 'interrupted'
+    if (!A.primed) { A.primed = true; const s = A.ctx.createBufferSource(); s.buffer = A.ctx.createBuffer(1, 1, 22050); s.connect(A.ctx.destination); s.start(0); } // classic iOS unlock
+  }
+  if (!A.tag) { A.tag = new Audio('sfx/silence.wav'); A.tag.loop = true; A.tag.setAttribute('playsinline', ''); A.tag.volume = .01; } // keeps iOS session in "playback"
+  if (A.tag.paused && !document.hidden) { const p = A.tag.play(); p && p.catch && p.catch(() => {}); }
+}
+['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'click', 'keydown'].forEach(ev => addEventListener(ev, unlock, { capture: true, passive: true }));
+document.addEventListener('visibilitychange', () => { if (document.hidden) { A.tag && A.tag.pause(); A.ctx && A.ctx.suspend && A.ctx.suspend().catch(() => {}); }
+  else if (A.ctx) { try { A.ctx.resume().catch(() => {}); } catch {} } });
+const live = () => A.ctx && A.ctx.state === 'running';
+function play(n, vol = 1, rate = 1, delay = 0) {
+  if (A.muted || !vol) return;
+  if (live() && A.buf[n]) { const c = A.ctx, s = c.createBufferSource(), g = c.createGain(); s.buffer = A.buf[n]; s.playbackRate.value = rate; g.gain.value = Math.min(1.5, vol);
+    s.connect(g).connect(A.master); s.start(c.currentTime + delay); return; }
+  const h = A.html[n]; if (!h) return; const go = () => { const a = h.cloneNode(); a.volume = Math.min(1, vol * A.vol); try { a.playbackRate = rate; } catch {} const p = a.play(); p && p.catch && p.catch(() => {}); };
+  delay ? setTimeout(go, delay * 1000) : go();
+}
+const rv = (a = .1) => 1 - a + Math.random() * 2 * a;
 const sfx = {
-  splat: (k = 1) => { const r = () => .82 + Math.random() * .36;
-    noiseHit(1500 * r(), 200, .2 * k, .17 * r());
-    noiseHit(1000 * r(), 160, .3 * k, .13 * r(), .008, 'bandpass', 3.5);
-    tone(230 * r(), 55, .16 * k, .15);
-    tone(480 * r(), 1150 * r(), .035 * k, .05, .03 + Math.random() * .03); },
-  death: () => { noiseHit(2400, 130, .34, .75); noiseHit(800, 110, .28, .4, .03, 'bandpass', 2.2); tone(140, 38, .26, .45);
-    const n = 4 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) { const d = .3 + i * .16 + Math.random() * .14, fq = 480 + Math.random() * 700;
-      tone(fq, fq * 2.3, .06, .06, d); tone(fq * 2.2, fq * 1.7, .022, .14, d + .045); } },
-  chime: () => [523.25, 659.25, 783.99].forEach((f, i) => { tone(f, f, .09, .7, i * .06, 'triangle'); tone(f * 2, f * 2, .03, .5, i * .06); }),
-  boost: () => { [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, f * 1.01, .1, .45, i * .05, 'triangle')); noiseHit(5000, 800, .12, .5); },
+  splat: (k = 1) => play('splat' + (1 + Math.floor(Math.random() * 3)), .75 * k * rv(.1), rv(.08)),
+  death: () => { play('splash', 1, rv(.05)); const n = 4 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) play(Math.random() < .5 ? 'drip1' : 'drip2', .45 * rv(.3), rv(.25), .3 + i * .16 + Math.random() * .14); },
+  chime: () => play('chime', .55), boost: () => play('boost', .65),
 };
-function swish(speed, on) { if (!A.ctx) return; const t = A.ctx.currentTime, k = on ? Math.min(1, speed / 1700) : 0, k2 = k * k;
-  A.swG.gain.setTargetAtTime(k2 * .055, t, .09); A.swF.frequency.setTargetAtTime(240 + speed * .9, t, .09);
-  A.brG.gain.setTargetAtTime(k2 * .012, t, .09); A.lfoG.gain.setTargetAtTime(k2 * .01, t, .09); A.lfo.frequency.setTargetAtTime(6 + k * 22, t, .1); }
-function setMute(m) { A.muted = m; store.set('inkswing.muted', m); const b = document.getElementById('mute'); b.textContent = m ? '🔇' : '🔊'; b.setAttribute('aria-pressed', m);
-  if (A.master) A.master.gain.setTargetAtTime(m ? 0 : .55, A.ctx.currentTime, .05); }
+function startSwish() { if (!A.ctx || A.swSrc || !A.buf.swish) return; const s = A.swSrc = A.ctx.createBufferSource(); s.buffer = A.buf.swish; s.loop = true; s.connect(A.swF); s.start(); }
+function swish(speed, on) { if (!live() || !A.swSrc) return; const t = A.ctx.currentTime, k = on ? Math.min(1, speed / 1700) : 0;
+  A.swG.gain.setTargetAtTime(k * k * .5, t, .09); A.swF.frequency.setTargetAtTime(350 + speed * 1.1, t, .09); A.swSrc.playbackRate.setTargetAtTime(.85 + k * .35, t, .1); }
+function setMute(m) { A.muted = !!m; store.set('inkswing.muted', A.muted); const b = document.getElementById('mute'); b.textContent = A.muted ? '🔇' : '🔊'; b.setAttribute('aria-pressed', A.muted);
+  if (A.master) A.master.gain.setTargetAtTime(A.muted ? 0 : A.vol, A.ctx.currentTime, .03); if (A.tag && A.muted) A.tag.pause(); }
+window.__audio = A;
 
 /* ---------- state ---------- */
 const S = { state: 'menu', mode: 'random', seed: 1 };
@@ -150,10 +159,10 @@ function release() { if (S.state !== 'play') return; S.holding = false;
 S.press = press; S.release = release;
 const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch {} };
 const isUI = e => e.target.closest && e.target.closest('button,.panel.show');
-addEventListener('pointerdown', e => { audioInit(); if (!isUI(e)) { e.preventDefault(); press(); } }, { passive: false });
+addEventListener('pointerdown', e => { if (!isUI(e)) { e.preventDefault(); press(); } }, { passive: false });
 addEventListener('pointerup', e => { if (!isUI(e)) release(); });
 addEventListener('pointercancel', release);
-addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { audioInit(); e.preventDefault(); if (!e.repeat) { if (S.state === 'over') return newRun(S.mode); press(); } } });
+addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); if (!e.repeat) { if (S.state === 'over') return newRun(S.mode); press(); } } });
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); });
 addEventListener('contextmenu', e => e.preventDefault());
 
