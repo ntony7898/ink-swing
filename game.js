@@ -102,7 +102,7 @@ function newRun(mode) {
   S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.sid = 0; S.poolT = 0; S.last = null; S.passed = 0; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0;
   S.trailStart = 0; S.cans = []; S.boostT = 0; S.boostReached = false; S.boostCount = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
   $('score').textContent = '0'; $('score').classList.remove('boost'); setPalLabel();
-  $('hud').classList.remove('hidden'); $('start').classList.remove('show'); $('over').classList.remove('show');
+  document.body.classList.remove('onstart'); $('hud').classList.remove('hidden'); $('start').classList.remove('show'); $('over').classList.remove('show');
   if (!store.get('inkswing.seen', false)) $('hint').classList.remove('hidden');
   pushTrail(true);
 }
@@ -477,12 +477,20 @@ $('btnDaily').onclick = () => newRun('daily');
 $('btnRetry').onclick = () => newRun(S.mode);
 $('btnShare').onclick = share;
 $('mute').onclick = () => setMute(!A.muted); setMute(A.muted);
-if (HW) { document.body.classList.add('hw'); document.querySelector('#over h2').innerHTML = 'BOO!<br>INKED OUT'; document.querySelector('.sub').textContent = 'Halloween Edition · Swing. Release. Paint the night.'; }
-$('btnTheme').textContent = HW ? 'Theme: Halloween 🎃 → Classic' : 'Theme: Classic → Halloween 🎃';
+if (HW) { document.body.classList.add('hw'); document.querySelector('#over h2').innerHTML = 'BOO!<br>INKED OUT'; (document.querySelector('.sub')||{}).textContent = 'Halloween Edition · Swing. Release. Paint the night.'; }
+$('btnTheme').innerHTML = HW ? '🎃 <b>HALLOWEEN</b> EDITION' : '🎨 <b>CLASSIC</b> EDITION'; $('btnTheme').title = 'Switch to ' + (HW ? 'Classic' : 'Halloween');
 $('btnTheme').onclick = () => { localStorage.setItem('inkswing.theme', HW ? 'classic' : 'halloween'); location.reload(); };
-$('btnMenu').onclick = () => { $('over').classList.remove('show'); $('start').classList.add('show'); S.state = 'menu'; };
-const modeUI = () => { $('bestStart').textContent = store.get('inkswing.best' + (S.chill ? '.chill' : ''), 0); $('btnChill').textContent = S.chill ? 'Mode: Chill · no obstacles ⇄' : 'Mode: Obstacles ⇄ Chill'; $('btnChill').classList.toggle('on', S.chill); };
+document.body.classList.add('onstart');
+$('btnMenu').onclick = () => { document.body.classList.add('onstart'); $('over').classList.remove('show'); $('start').classList.add('show'); S.state = 'menu'; };
+const modeUI = () => { const k = 'inkswing.best' + (S.chill ? '.chill' : ''); $('bestStart').textContent = store.get(k, 0); $('bestLabel').textContent = S.chill ? 'BEST · CHILL' : 'BEST · OBSTACLES';
+  const c = $('btnChill'); c.classList.toggle('on', S.chill); c.setAttribute('aria-pressed', S.chill); $('chillState').textContent = S.chill ? 'ON' : 'OFF';
+  $('chillSub').textContent = S.chill ? 'On: no obstacles, just paint' : 'No obstacles, just paint'; };
+const P0 = PALETTES[0]; $('palLabel').textContent = 'PALETTE · ' + P0.name.toUpperCase(); $('palDots').innerHTML = [...new Set([...P0.cols, P0.ink])].slice(0, 4).map(c => `<i style="background:${c}"></i>`).join('');
+const scoreSheet = () => { const t = today(), rows = [['Obstacles', 'inkswing.best'], ['Chill', 'inkswing.best.chill'], ['Daily · Obstacles', 'inkswing.best.daily.' + t], ['Daily · Chill', 'inkswing.best.daily.' + t + '.chill']];
+  $('scoreList').innerHTML = rows.map(([n, k]) => `<li>${n}<b>${store.get(k, 0)}</b></li>`).join(''); $('scores').hidden = false; };
+$('btnScoresClose').onclick = () => { $('scores').hidden = true; };
+if (!(window.InkNative && InkNative.native)) $('btnLeaders').onclick = scoreSheet;
 $('btnChill').onclick = () => { S.chill = !S.chill; localStorage.setItem('inkswing.chill', S.chill ? '1' : '0'); modeUI(); }; modeUI();
-$('dailyTag').textContent = `${today().slice(0, 4)}·${today().slice(4, 6)}·${today().slice(6)} · same pins for everyone`;
+$('dailyTag').textContent = `${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · same course for all`;
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

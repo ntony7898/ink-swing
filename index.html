@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#F1E9DA">
+<meta name="theme-color" content="#F2E9DA">
 <meta name="description" content="Ink Swing — swing, release, paint a poster.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Ink Swing</title>
@@ -23,18 +23,32 @@
 </div>
 <div id="hint" class="hidden"><div class="hand"></div><b>HOLD</b> to grab a pin<br><b>RELEASE</b> to fling</div>
 
-<section id="start" class="panel show">
-  <h1><span>INK</span><span>SWING</span></h1>
-  <p class="sub">Swing. Release. Paint a poster.</p>
-  <div class="modes">
-    <button class="btn" id="btnRandom">Play</button>
-    <button class="btn alt" id="btnDaily">Daily Seed <small id="dailyTag"></small></button>
+<section id="start" class="panel show homeB">
+  <div class="hb-top"><button class="hb-pill" id="btnTheme"></button><button class="hb-pill hb-trophy" id="btnLeaders" aria-label="Leaderboard">🏆</button></div>
+  <h1 class="hb-logo"><img src="img/logo-B.webp" alt="Ink Swing" width="900" height="561"></h1>
+  <p class="hb-tag">Hold to grab. Release to fling. Paint a poster.</p>
+  <button class="hb-play" id="btnRandom"><i></i>PLAY</button>
+  <div class="hb-modes">
+    <button class="hb-card" id="btnDaily" style="--c:#1F4FA8"><b>Daily Seed</b><small id="dailyTag"></small></button>
+    <button class="hb-card" id="btnChill" style="--c:#F4C430" aria-pressed="false"><b>Chill Mode <em id="chillState">OFF</em></b><small id="chillSub">No obstacles, just paint</small></button>
   </div>
-  <button class="btn alt mode" id="btnChill">Mode</button>
-  <p class="best">Best <b id="bestStart">0</b></p>
-  <button class="link" id="btnTheme">Theme</button>
-  <p class="keys">Touch &amp; hold · Mouse · Space</p>
+  <div class="hb-stats"><div><span id="bestLabel">BEST</span><b id="bestStart">0</b></div>
+    <div class="hb-pal"><span id="palLabel">PALETTE · BAUHAUS</span><div id="palDots"></div></div></div>
+  <div class="hb-swing" aria-hidden="true"><svg class="trail" viewBox="0 0 430 70" preserveAspectRatio="none"><path d="M40 30 C120 70 170 0 215 30 S320 70 390 25" fill="none" stroke="#E8392D" stroke-width="14" stroke-linecap="round"/></svg><div class="pin"></div><div class="pend"><svg viewBox="0 0 40 150" width="40" height="150" class="bsvg">
+<line x1="20" y1="0" x2="20" y2="40" stroke="#111" stroke-width="3"/>
+<circle cx="20" cy="42" r="4" fill="none" stroke="#111" stroke-width="2.5"/>
+<path d="M16 46 L24 46 L26 92 L14 92 Z" fill="#B8743A" stroke="#111" stroke-width="2"/>
+<path d="M17 50 L18 88" stroke="#E0A060" stroke-width="2" stroke-linecap="round"/>
+<rect x="12" y="90" width="16" height="18" rx="2" fill="#C9CCD2" stroke="#111" stroke-width="2"/>
+<line x1="12" y1="96" x2="28" y2="96" stroke="#111" stroke-width="1.5"/><line x1="12" y1="101" x2="28" y2="101" stroke="#111" stroke-width="1.5"/>
+<path d="M11 107 L29 107 C31 120 27 132 20 140 C13 132 9 120 11 107 Z" fill="#2A1A14" stroke="#111" stroke-width="2"/>
+<path d="M11.5 117 C14 116 26 116 28.5 117 C29 126 25 134 20 140 C15 134 11 126 11.5 117 Z" fill="#E8392D"/>
+<path d="M15 120 L17 134 M20 119 L20 138 M25 120 L23 134" stroke="#B5241B" stroke-width="1.2"/>
+<ellipse cx="16" cy="122" rx="2" ry="4" fill="#ffffff66"/>
+</svg><div class="drop"></div></div></div>
+  <div class="hb-foot"><span class="native-only"><button class="hb-link" id="btnRemoveAds"><b>Remove Ads</b></button> · <button class="hb-link" id="btnRestore">Restore</button></span><span class="hb-hint">Touch &amp; hold to play</span></div>
 </section>
+<div id="scores" class="hb-sheet" hidden><div class="hb-sheet-in"><h3>Best Scores</h3><ul id="scoreList"></ul><button class="hb-play hb-close" id="btnScoresClose">Close</button></div></div>
 
 <section id="over" class="panel">
   <p class="kicker" id="overMode">Random run</p>
