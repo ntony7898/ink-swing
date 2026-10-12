@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#F1E9DA">
+<meta name="description" content="Ink Swing — swing, release, paint a poster.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Ink Swing</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preload" href="fonts/ArchivoBlack-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud" class="hidden">
+  <div id="score">0</div>
+  <div id="pal" class="pill">Bauhaus</div>
+  <div id="toast"></div>
+</div>
+<div id="hint" class="hidden"><div class="hand"></div><b>HOLD</b> to grab a pin<br><b>RELEASE</b> to fling</div>
+
+<section id="start" class="panel show">
+  <h1><span>INK</span><span>SWING</span></h1>
+  <p class="sub">Swing. Release. Paint a poster.</p>
+  <div class="modes">
+    <button class="btn" id="btnRandom">Play</button>
+    <button class="btn alt" id="btnDaily">Daily Seed <small id="dailyTag"></small></button>
+  </div>
+  <p class="best">Best <b id="bestStart">0</b></p>
+  <p class="keys">Touch &amp; hold · Mouse · Space</p>
+</section>
+
+<section id="over" class="panel">
+  <p class="kicker" id="overMode">Random run</p>
+  <h2>INKED<br>OUT</h2>
+  <div class="final" id="finalScore">0</div>
+  <p class="best" id="overBest">Best 0</p>
+  <img id="posterPrev" alt="Your poster">
+  <div class="row">
+    <button class="btn" id="btnRetry">Retry</button>
+    <button class="btn alt" id="btnShare">Share Poster</button>
+  </div>
+  <button class="link" id="btnMenu">Menu</button>
+</section>
+<script src="game.js"></script>
+</body>
+</html>
