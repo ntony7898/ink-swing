@@ -4,7 +4,7 @@
 const WH = 1100, G = 1900, PUMP = 260, GRAB_R = 430, STEP = 1 / 120, MAXV = 1700, PIN_R = 11;
 const PALETTES = [
   { name: 'Bauhaus', bg: '#F1E9DA', ink: '#141414', cols: ['#E63A2E', '#1F4FA3', '#F4C430', '#141414'], deco: 'bauhaus' },
-  { name: 'Swiss', bg: '#F4F4F0', ink: '#111111', cols: ['#E30613', '#111111', '#E30613'], deco: 'swiss' },
+  { name: 'Swiss', bg: '#F4F4F0', ink: '#111111', cols: ['#E30613', '#111111', '#8C8C8C'], deco: 'swiss' },
   { name: 'Risograph', bg: '#F7EFE3', ink: '#1B2A6B', cols: ['#FF48B0', '#0078BF', '#FFE800', '#00A95C'], deco: 'riso', blend: 'multiply' },
   { name: 'Memphis', bg: '#FFF1DC', ink: '#1A1A1A', cols: ['#FF6F91', '#2EC4B6', '#FFD23F', '#6A4C93'], deco: 'memphis' },
 ];
@@ -79,14 +79,14 @@ function genPins(upTo) {
     const gap = 215 + Math.min(175, i * 4) + r() * (50 + Math.min(130, i * 3));
     const vari = 110 + Math.min(300, i * 9);
     const y = Math.max(130, Math.min(600, 300 + (r() - .5) * vari));
-    S.pins.push({ x: last.x + gap, y });
+    S.pins.push({ x: last.x + gap, y }); genObstacle(i, last, gap, y);
     if (S.boostReached && Math.random() < .3) S.cans.push({ x: last.x + gap * (.4 + Math.random() * .2), y: Math.min(820, Math.max(last.y, y) + 120 + Math.random() * 220), got: false });
   }
 }
 function newRun(mode) {
   S.mode = mode; S.seed = mode === 'daily' ? +today() : (Math.random() * 1e9) | 0;
   S.rng = mulberry(S.seed);
-  S.pins = [{ x: 260, y: 300 }]; genPins(12);
+  S.obs = []; S.orbs = []; S.cur = 0; S.cleared = 0; S.cause = ''; S.pins = [{ x: 260, y: 300 }]; genPins(12);
   S.p = { x: 120, y: 470 }; S.v = { x: 0, y: 0 };
   S.pin = S.pins[0]; S.L = Math.hypot(S.p.x - 260, S.p.y - 300);
   S.holding = true; S.startX = S.p.x; S.maxX = S.p.x; S.bonus = 0; S.score = 0; S.palIdx = 0; S.palT = 1; S.prevPal = 0;
@@ -98,7 +98,7 @@ function newRun(mode) {
   pushTrail(true);
 }
 const pal = () => PALETTES[S.palIdx % PALETTES.length];
-const color = () => { const c = pal().cols; return c[S.colIdx % c.length]; };
+const color = () => pal().cols[S.cur % NC];
 function setPalLabel() { $('pal').textContent = pal().name; $('pal').style.background = pal().cols[0]; document.querySelector('meta[name=theme-color]').content = pal().bg; }
 function toast(t, c) { const e = $('toast'); e.textContent = t; e.style.color = c || pal().ink; e.classList.remove('go'); void e.offsetWidth; e.classList.add('go'); }
 function pushTrail(force) {
@@ -134,16 +134,57 @@ function stampPath(g, o) { const r = o.r; g.beginPath();
   if (o.sh === 'ring') { g.arc(0, 0, r, 0, 6.283); g.arc(0, 0, r * .62, 0, 6.283, true); }
   else if (o.sh === 'cross') { const w = r * .32; g.rect(-r, -w, 2 * r, 2 * w); g.rect(-w, -r, 2 * w, r - w); g.rect(-w, w, 2 * w, r - w); }
   else if (o.sh === 'gate') { const w = r * .26; g.rect(-r, -r, w, 2 * r); g.rect(r - w, -r, w, 2 * r); g.rect(-r, -r, 2 * r, w); }
+  else if (o.sh === 'bar') { const w = r * .2; g.rect(-r, -w, 2 * r, 2 * w); }
   else if (o.sh === 'half') { g.arc(0, 0, r, Math.PI, 0); g.closePath(); }
   else if (o.sh === 'tri') { g.moveTo(0, -r); g.lineTo(r * .95, r * .7); g.lineTo(-r * .95, r * .7); g.closePath(); }
   else { for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283, rr = i % 2 ? r * .55 : r; i ? g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : g.moveTo(rr, 0); } g.closePath(); } }
 function drawStamp(g, o) { g.globalCompositeOperation = 'multiply';
-  for (const [c, dx, dy, al] of [[o.c, 0, 0, .78], [o.c2, o.off, -o.off * .6, .5]]) { g.save(); g.translate(o.x + dx, o.y + dy); g.rotate(o.rot); g.globalAlpha = al; g.fillStyle = c; stampPath(g, o); g.fill('evenodd'); g.restore(); }
+  for (const [c, dx, dy, al] of [[o.c, 0, 0, .78], [o.c2, o.off, -o.off * .6, .38]]) { g.save(); g.translate(o.x + dx, o.y + dy); g.rotate(o.rot); g.globalAlpha = al; g.fillStyle = c; stampPath(g, o); g.fill('evenodd'); g.restore(); }
   g.globalAlpha = 1; }
-function stamp(x, y, big) { const P = pal(), cs = P.cols, i = Math.floor(Math.random() * cs.length);
+function stamp(x, y, big, opt = {}) { const P = pal(), cs = P.cols, i = opt.ci ?? Math.floor(Math.random() * cs.length);
   const shapes = { bauhaus: ['ring', 'half', 'tri'], swiss: ['cross', 'gate', 'cross'], riso: ['ring', 'burst', 'half'], memphis: ['tri', 'gate', 'burst', 'ring'] }[P.deco];
   const r = big ? 150 + Math.random() * 70 : 80 + Math.random() * 90, sh = big ? 'burst' : shapes[Math.floor(Math.random() * shapes.length)];
-  paint({ t: 'k', x, y, r, sh, rot: P.deco === 'swiss' ? 0 : (Math.random() - .5) * 1.2, c: cs[i], c2: cs[(i + 1) % cs.length], off: 4 + Math.random() * 5, bx0: x - r - 12, bx1: x + r + 12 }); }
+  paint({ t: 'k', x, y, r: opt.r || r, sh: opt.sh || sh, rot: opt.rot ?? (P.deco === 'swiss' ? 0 : (Math.random() - .5) * 1.2), c: cs[i], c2: shade(cs[(i + 1) % cs.length], .5), off: 4 + Math.random() * 5, bx0: x - (opt.r || r) - 12, bx1: x + (opt.r || r) + 12 }); }
+/* ---------- obstacles (Color Switch-style) ---------- */
+const BR = 10, TOL = 5, NC = 3, GATE_H = 170; // brush radius, generous tolerance, gameplay colors, gate block height
+function genObstacle(i, last, gap, y) { const r = S.rng; if (last.x < 1450 || r() > Math.min(.8, .42 + (i - 6) * .02)) return;
+  const spd = (.9 + Math.min(1.4, i * .025)) * (r() < .5 ? -1 : 1), x = last.x + gap * .58, kind = ['ring', 'cross', 'gate'][Math.floor(r() * 3)];
+  const sh = [0, 1, 2].sort(() => r() - .5);
+  let o; if (kind === 'ring') { const R = Math.min(gap * .34, 115 + r() * 40); o = { kind, x, y: Math.min(WH - R - 50, (last.y + y) / 2 + 200 + r() * 80), R, th: 20, cs: [sh[0], sh[1], sh[2], sh[r() * 3 | 0]].slice(0, r() < .5 ? 3 : 4) }; }
+  else if (kind === 'cross') { const R = 120 + r() * 40, arms = r() < .4 ? 2 : 4; o = { kind, x, y: Math.min(WH - R - 40, (last.y + y) / 2 + 210 + r() * 70), R, th: 18, arms, cs: arms === 2 ? [sh[0], sh[1]] : [sh[0], sh[1], sh[2], sh[0]] }; }
+  else o = { kind, x, y: WH / 2, R: 14, th: 26, cs: sh, off: r() * GATE_H * 3 };
+  o.rot = r() * 6.28; o.spd = spd; o.st = 0; o.touched = false; S.obs.push(o);
+  S.orbs.push({ x: last.x + 30 + r() * 40, y: Math.min(WH - 120, last.y + 230 + r() * 60), ci: sh[r() * 3 | 0], got: false }); }
+function obsColorAt(o, p) { const dx = p.x - o.x, dy = p.y - o.y, hit = o.th / 2 + BR - TOL;
+  if (o.kind === 'ring') { const d = Math.hypot(dx, dy); if (Math.abs(d - o.R) > hit) return -1; let a = (Math.atan2(dy, dx) - o.rot) % 6.2832; if (a < 0) a += 6.2832; return o.cs[Math.floor(a / (6.2832 / o.cs.length)) % o.cs.length]; }
+  if (o.kind === 'cross') { for (let k = 0; k < o.arms; k++) { const a = o.rot + k * 6.2832 / o.arms, ex = Math.cos(a) * o.R, ey = Math.sin(a) * o.R, t = Math.max(0, Math.min(1, (dx * ex + dy * ey) / (o.R * o.R)));
+      if (Math.hypot(dx - ex * t, dy - ey * t) < hit) return o.cs[k]; } return -1; }
+  if (Math.abs(dx) > hit) return -1; const n = o.cs.length, m = (((p.y - o.off) % (GATE_H * n)) + GATE_H * n) % (GATE_H * n); return o.cs[Math.floor(m / GATE_H)]; }
+function stepObstacles(dt) { const p = S.p;
+  for (const o of S.obs) { o.rot += o.spd * dt; if (o.kind === 'gate') o.off += o.spd * 90 * dt;
+    if (o.st || o.x > p.x + 300 || o.x < p.x - 400) continue;
+    const c = obsColorAt(o, p);
+    if (c >= 0) { if (S.boostT > 0) { smash(o); continue; } if (c !== S.cur) { S.cause = 'obstacle'; return die(); }
+      if (!o.touched) { o.touched = true; splat(p.x, p.y, color(), .7); sfx.splat(.6); } }
+    if (p.x > o.x + (o.kind === 'gate' ? 30 : o.R + 30)) clearObs(o); }
+  for (const b of S.orbs) if (!b.got && Math.hypot(b.x - p.x, b.y - p.y) < 46) { b.got = true; S.cur = b.ci; splat(b.x, b.y, color(), .8); sfx.chime(); toast('NEW COLOR', color()); pushTrail(true); }
+}
+function obsStamp(o) { const P = pal(), sh = o.kind === 'ring' ? 'ring' : o.kind === 'cross' ? (o.arms === 2 ? 'bar' : 'cross') : 'gate';
+  stamp(o.x, o.kind === 'gate' ? S.p.y : o.y, false, { sh, r: o.kind === 'gate' ? 110 : o.R + 10, rot: o.kind === 'cross' ? o.rot : P.deco === 'swiss' ? 0 : o.rot * .2, ci: o.cs[0] }); }
+function clearObs(o) { o.st = 1; S.cleared++; obsStamp(o); if (o.touched) { S.bonus += 2; toast('CLEAN PASS +2', color()); sfx.chime(); vibrate(10); } }
+function smash(o) { o.st = 2; S.cleared++; S.bonus += 2; obsStamp(o); splat(S.p.x, S.p.y, pal().cols[o.cs[0]], 1.6); S.shake = 14; toast('SMASH +2', pal().cols[0]); sfx.splat(1.3); }
+function drawObstacles(g, x0, x1, P) { g.lineCap = 'butt';
+  for (const o of S.obs) { if (o.st === 2 || o.x < x0 - 200 || o.x > x1 + 200) continue; g.globalAlpha = o.st ? .25 : 1; const col = k => P.cols[k];
+    if (o.kind === 'ring') { const n = o.cs.length, seg = 6.2832 / n; g.lineWidth = o.th; for (let k = 0; k < n; k++) { g.strokeStyle = col(o.cs[k]); g.beginPath(); g.arc(o.x, o.y, o.R, o.rot + k * seg + .03, o.rot + (k + 1) * seg - .03); g.stroke(); } }
+    else if (o.kind === 'cross') { g.lineWidth = o.th; g.lineCap = 'round'; for (let k = 0; k < o.arms; k++) { const a = o.rot + k * 6.2832 / o.arms; g.strokeStyle = col(o.cs[k]); g.beginPath(); g.moveTo(o.x + Math.cos(a) * 14, o.y + Math.sin(a) * 14); g.lineTo(o.x + Math.cos(a) * o.R, o.y + Math.sin(a) * o.R); g.stroke(); }
+      g.fillStyle = P.ink; g.beginPath(); g.arc(o.x, o.y, 12, 0, 6.283); g.fill(); g.lineCap = 'butt'; }
+    else { const n = o.cs.length, H = GATE_H * n, start = ((o.off % H) + H) % H - H; for (let yy = start, k = 0; yy < WH; yy += GATE_H, k++) { g.fillStyle = col(o.cs[k % n]); g.fillRect(o.x - o.th / 2, yy + 3, o.th, GATE_H - 6); } }
+  }
+  g.globalAlpha = 1;
+  for (const b of S.orbs) { if (b.got || b.x < x0 - 60 || b.x > x1 + 60) continue; const c = P.cols[b.ci], by = b.y + Math.sin(S.t * 5 + b.x) * 6;
+    g.save(); g.translate(b.x, by); g.shadowColor = c; g.shadowBlur = 22; g.fillStyle = c; g.beginPath(); g.moveTo(0, -30); g.bezierCurveTo(16, -10, 20, 4, 20, 10); g.arc(0, 10, 20, 0, Math.PI); g.bezierCurveTo(-20, 4, -16, -10, 0, -30); g.fill();
+    g.shadowBlur = 0; g.strokeStyle = P.ink; g.lineWidth = 3; g.stroke(); g.globalAlpha = .5; g.fillStyle = '#fff'; g.beginPath(); g.ellipse(-7, 6, 4, 8, -.4, 0, 6.283); g.fill(); g.restore(); }
+}
 function drawDrip(g, o, len, wk) { const w = o.w * wk; g.fillStyle = o.c; g.strokeStyle = o.c; g.lineCap = 'round'; g.lineWidth = w; g.beginPath(); g.moveTo(o.x, o.y); g.lineTo(o.x, o.y + len); g.stroke();
   g.beginPath(); g.ellipse(o.x, o.y + len, w * .85, w * 1.05, 0, 0, 6.283); g.fill(); g.globalAlpha = .35; g.strokeStyle = '#fff'; g.lineWidth = Math.max(.6, w * .2);
   g.beginPath(); g.moveTo(o.x - w * .2, o.y + 2); g.lineTo(o.x - w * .2, o.y + Math.max(2, len - w * .4)); g.stroke(); g.globalAlpha = 1; }
@@ -188,7 +229,7 @@ function candidate() { let best = null, bd = GRAB_R;
     const d = Math.hypot(pn.x - S.p.x, pn.y - S.p.y); if (d < bd && pn.y < S.p.y + 60) { bd = d; best = pn; } }
   return best; }
 function grab(pn) {
-  S.pin = pn; S.L = Math.hypot(S.p.x - pn.x, S.p.y - pn.y); S.grabs++; S.colIdx++;
+  S.pin = pn; S.L = Math.hypot(S.p.x - pn.x, S.p.y - pn.y); S.grabs++;
   pushTrail(true);
   const near = S.lowY > WH - 170, clean = S.L < 250 && Math.abs(S.p.x - pn.x) < 170;
   let txt = null, add = 0;
@@ -203,7 +244,7 @@ function splat(x, y, c, k = 1) {
   for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, s = 160 + Math.random() * 520 * Math.sqrt(k);
     S.parts.push({ x, y, vx: Math.cos(a) * s + S.v.x * .25, vy: Math.sin(a) * s + S.v.y * .25 - 120, r: 2 + Math.random() * 6, c, m, life: .25 + Math.random() * .55 }); }
 }
-function deathSplash() { const x = S.p.x, y = WH - 30, cs = pal().cols, c = color(); splat(x, y, c, 3.2); splat(x - 90, y - 40, cs[(S.colIdx + 1) % cs.length], 1.4);
+function deathSplash() { const x = S.p.x, y = S.cause === 'obstacle' ? S.p.y : WH - 30, cs = pal().cols, c = color(); splat(x, y, c, 3.2); splat(x - 90, y - 40, cs[(S.cur + 1) % NC], 1.4);
   for (let i = 0; i < 50 && S.parts.length < MAXP; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 2.2, s = 500 + Math.random() * 900;
     S.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: 3 + Math.random() * 8, c: cs[i % cs.length], m: false, life: .4 + Math.random() * .8 }); }
   for (let i = 0; i < 11; i++) S.sdrips.push({ x: Math.random() * W, len: 0, max: H * (.2 + Math.random() * .6), v: 260 + Math.random() * 520, w: 6 + Math.random() * 18, c: i % 3 ? c : cs[i % cs.length], d: Math.random() * .25 }); }
@@ -219,6 +260,7 @@ function step(dt) {
     v.x *= .9995; v.y *= .9995;
     const mv = S.boostT > 0 ? 2300 : MAXV, sp = Math.hypot(v.x, v.y); if (sp > mv) { v.x *= mv / sp; v.y *= mv / sp; }
     if (S.boostT > 0) S.boostT -= dt;
+    stepObstacles(dt); if (S.state !== 'play') return;
     for (const cn of S.cans) if (!cn.got && Math.hypot(cn.x - p.x, cn.y - p.y) < 70) collect(cn);
     p.x += v.x * dt; p.y += v.y * dt;
     if (S.pin) { const dx = p.x - S.pin.x, dy = p.y - S.pin.y, r = Math.hypot(dx, dy);
@@ -309,6 +351,7 @@ function render() {
     g.fillStyle = P.ink; g.fillRect(-24, -30, 48, 60); g.shadowBlur = 0; for (let k = 0; k < 3; k++) { g.fillStyle = cs[k % cs.length]; g.fillRect(-24, -14 + k * 10, 48, 10); }
     g.fillStyle = '#C9C9C9'; g.fillRect(-26, -34, 52, 8); g.strokeStyle = P.ink; g.lineWidth = 4; g.beginPath(); g.arc(0, -36, 16, Math.PI, 0); g.stroke();
     g.fillStyle = cs[0]; g.beginPath(); g.ellipse(14, -34, 9, 5, 0, 0, 6.28); g.fill(); g.restore(); }
+  drawObstacles(g, x0, x1, P);
   // rope
   const p = S.p;
   if (S.pin && S.state !== 'over') { g.strokeStyle = P.ink; g.lineWidth = 4; g.beginPath(); g.moveTo(S.pin.x, S.pin.y); g.lineTo(p.x, p.y); g.stroke(); }
@@ -339,7 +382,7 @@ async function makePoster() {
   g.fillStyle = '#141414'; g.font = `190px ${F}`; g.textAlign = 'left'; g.fillText('INK', 54, 220); g.fillStyle = '#E63A2E'; g.fillText('SWING', 54, 400);
   g.fillStyle = '#141414'; g.font = `bold 26px system-ui,sans-serif`; g.textAlign = 'right';
   g.fillText(S.mode === 'daily' ? `DAILY ${today()}` : `RUN #${String(S.seed % 100000).padStart(5, '0')}`, Wp - 60, 90);
-  g.fillText(`${S.grabs} GRABS`, Wp - 60, 128); if (S.boostReached) { g.fillStyle = '#E63A2E'; g.fillText(`★ INK BOOST REACHED${S.boostCount ? ` · ${S.boostCount} CANS` : ''}`, Wp - 60, 204); g.fillStyle = '#141414'; } g.fillText(PALETTES.slice(0, Math.min(4, S.palIdx + 1)).map(p => p.name.toUpperCase()).join(' / '), Wp - 60, 166);
+  g.fillText(`${S.grabs} GRABS · ${S.cleared} OBSTACLES CLEARED`, Wp - 60, 128); if (S.boostReached) { g.fillStyle = '#E63A2E'; g.fillText(`★ INK BOOST REACHED${S.boostCount ? ` · ${S.boostCount} CANS` : ''}`, Wp - 60, 204); g.fillStyle = '#141414'; } g.fillText(PALETTES.slice(0, Math.min(4, S.palIdx + 1)).map(p => p.name.toUpperCase()).join(' / '), Wp - 60, 166);
   // art: the whole trail, wrapped into stacked strips like lines of text
   const ax = 60, ay = 450, aw = 960, ah = 1050;
   g.fillStyle = '#FFFFFF'; g.fillRect(ax, ay, aw, ah);
