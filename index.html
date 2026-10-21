@@ -24,7 +24,7 @@
 <div id="hint" class="hidden"><div class="hand"></div><b>HOLD</b> to grab a pin<br><b>RELEASE</b> to fling</div>
 
 <section id="start" class="panel show homeB">
-  <div class="hb-top"><button class="hb-pill" id="btnTheme"></button><button class="hb-pill hb-trophy" id="btnLeaders" aria-label="Leaderboard">🏆</button></div>
+  <div class="hb-top"><button class="hb-pill" id="btnTheme"></button><span class="hb-tr"><button class="hb-pill" id="btnShop">🛒 <b>SHOP</b></button><button class="hb-pill hb-trophy" id="btnLeaders" aria-label="Leaderboard">🏆</button></span></div>
   <h1 class="hb-logo"><img src="img/logo-B.webp" alt="Ink Swing" width="900" height="561"></h1>
   <p class="hb-tag">Hold to grab. Release to fling. Paint a poster.</p>
   <button class="hb-play" id="btnRandom"><i></i>PLAY</button>
@@ -37,6 +37,7 @@
   <div class="hb-swing" aria-hidden="true"></div>
   <div class="hb-foot"><span class="native-only"><button class="hb-link" id="btnRemoveAds"><b>Remove Ads</b></button> · <button class="hb-link" id="btnRestore">Restore</button></span><span class="hb-hint">Touch &amp; hold to play</span></div>
 </section>
+<div id="shop" class="hb-sheet" hidden role="dialog" aria-label="Brush shop"><div class="hb-sheet-in pk-in"><h3>Brush Shop</h3><p class="sh-wallet">💧 <b id="shopWallet">0</b> Ink Drops <small>· 1 per point scored</small></p><div id="shopList" class="pk-list"></div><button class="hb-play hb-close" id="shopClose">Done</button></div></div>
 <div id="picker" class="hb-sheet" hidden role="dialog" aria-label="Palette"><div class="hb-sheet-in pk-in"><h3>Palette</h3><div id="pkList" class="pk-list"></div>
   <div id="pkCustom" class="pk-custom" hidden><h3>Custom</h3><div id="pkSlots" class="pk-slots"></div>
     <label>Hue<input type="range" id="pkHue" min="0" max="359" class="pk-hue"></label><label>Lightness<input type="range" id="pkLight" min="5" max="95"></label>

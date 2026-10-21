@@ -1,5 +1,5 @@
-const C = 'ink-swing-v18';
-const A = ['./', 'index.html', 'style.css', 'game.js', 'home-brush.js', 'manifest.webmanifest', 'fonts/ArchivoBlack-latin.woff2', 'icons/icon.svg', 'img/logo-B.webp', 'img/logo-B-halloween.webp', 'icons/icon-192.png', 'icons/icon-512.png',
+const C = 'ink-swing-v19';
+const A = ['./', 'index.html', 'style.css', 'game.js', 'home-brush.js', 'manifest.webmanifest', 'fonts/ArchivoBlack-latin.woff2', 'icons/icon.svg', 'img/logo-B.webp', 'img/logo-B-halloween.webp', ...['witch-broom','skeleton-bone','gold-calligraphy'].flatMap(b => [`img/brushes/${b}.png`, `img/brushes/${b}-icon.png`]), 'icons/icon-192.png', 'icons/icon-512.png',
   ...['splat-yt', 'pad', 'splash', 'drip1', 'drip2', 'chime', 'boost', 'swish', 'silence'].map(n => `sfx/${n}.wav`)];
 self.addEventListener('install', e => e.waitUntil(caches.open(C).then(c => c.addAll(A)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== C).map(x => caches.delete(x)))).then(() => self.clients.claim())));

@@ -115,6 +115,39 @@ function setMute(m) { A.muted = !!m; store.set('inkswing.muted', A.muted); const
 window.__audio = A;
 
 /* ---------- state ---------- */
+const RM = matchMedia('(prefers-reduced-motion: reduce)');
+const BRUSHES = [
+  { id: 'classic', name: 'Classic Brush', price: 0, desc: 'The original red-handled brush. Reliable, splashy, yours.' },
+  { id: 'witch-broom', name: 'Witch Broom', price: 150, desc: "A crooked broomstick with a slime-green curl. Swings like it's late for the coven.", fx: ['#7BE04A', '#5BBF2E', '#6B3FA0'] },
+  { id: 'skeleton-bone', name: 'Skeleton Bone', price: 300, desc: 'A femur handle with a grinning skull ferrule and bone-white bristles.', fx: ['#F2E9DA', '#C9C2B6', '#B9A8CC'] },
+  { id: 'gold-calligraphy', name: 'Gold Calligraphy', price: 500, desc: 'Midnight lacquer with gold rings and a gilded tip. Spooky-elegant strokes.', fx: ['#F4C430', '#FF7A1A', '#F2E9DA'] },
+];
+const BIMG = {}; for (const b of BRUSHES.slice(1)) { const im = new Image(); im.src = `img/brushes/${b.id}.png`; BIMG[b.id] = im; }
+const shopState = { wallet: store0('inkswing.wallet', 0), owned: store0('inkswing.owned', ['classic']), eq: store0('inkswing.brush', 'classic') };
+if (new URLSearchParams(location.search).get('unlockall') === '1') shopState.owned = BRUSHES.map(b => b.id);
+const eqBrush = () => BRUSHES.find(b => b.id === shopState.eq && shopState.owned.includes(b.id)) || BRUSHES[0];
+const MAXFX = 48;
+function brushFx(dt) { // cosmetic only: Math.random never touches the seeded course RNG
+  const B = eqBrush(); if (!B.fx || RM.matches || S.state !== 'play' || !S.started) return;
+  const p = S.p, sp = Math.hypot(S.v.x, S.v.y), c = B.fx; S.ribbon.push({ x: p.x, y: p.y }); if (S.ribbon.length > 14) S.ribbon.shift();
+  const rate = Math.min(1, sp / 900) * dt * (B.id === 'skeleton-bone' ? 26 : 14);
+  if (S.fx.length < MAXFX && Math.random() < rate) {
+    const j = () => (Math.random() - .5) * 16;
+    if (B.id === 'witch-broom') S.fx.push(Math.random() < .55 ? { k: 'drip', x: p.x + j(), y: p.y + j(), vx: 0, vy: 60, r: 4 + Math.random() * 4, c: c[(Math.random() * 2) | 0], life: .9, L: .9 }
+      : { k: 'spark', x: p.x, y: p.y, vx: (Math.random() - .5) * 260, vy: (Math.random() - .5) * 260, r: 2.5, c: c[2], life: .45, L: .45 });
+    else if (B.id === 'skeleton-bone') S.fx.push({ k: 'dust', x: p.x + j(), y: p.y + j(), vx: (Math.random() - .5) * 60 - S.v.x * .05, vy: -20 - Math.random() * 40, r: 1.5 + Math.random() * 3.5, c: c[(Math.random() * 3) | 0], life: .8 + Math.random() * .5, L: 1.3 });
+    else S.fx.push({ k: 'star', x: p.x + j() * 2, y: p.y + j() * 2, vx: 0, vy: -15, r: 5 + Math.random() * 6, c: c[Math.random() < .7 ? 0 : 2], life: .6, L: .6, a: Math.random() * 6 });
+  }
+  for (const q of S.fx) { if (q.k === 'drip') q.vy += 900 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
+  S.fx = S.fx.filter(q => q.life > 0);
+}
+function drawFx(g) { const B = eqBrush(); if (!B.fx) return;
+  if (B.id === 'gold-calligraphy' && S.ribbon.length > 2 && !RM.matches) { g.lineCap = 'round'; const R = S.ribbon; for (let i = 1; i < R.length; i++) { g.strokeStyle = i % 2 ? B.fx[0] : B.fx[1]; g.globalAlpha = i / R.length * .85; g.lineWidth = 1 + i * .45; g.beginPath(); g.moveTo(R[i - 1].x, R[i - 1].y + 6); g.lineTo(R[i].x, R[i].y + 6); g.stroke(); } g.globalAlpha = 1; }
+  for (const q of S.fx) { g.globalAlpha = Math.max(0, q.life / q.L); g.fillStyle = q.c;
+    if (q.k === 'star') { const r = q.r * (.6 + .4 * Math.sin(S.t * 18 + q.a)); g.beginPath(); for (let i = 0; i < 8; i++) { const a = i * .785, rr = i % 2 ? r * .28 : r; g.lineTo(q.x + Math.cos(a) * rr, q.y + Math.sin(a) * rr); } g.fill(); }
+    else if (q.k === 'drip') { g.beginPath(); g.ellipse(q.x, q.y, q.r * .8, q.r * 1.3, 0, 0, 6.283); g.fill(); }
+    else { g.fillRect(q.x - q.r / 2, q.y - q.r / 2, q.r, q.r); } }
+  g.globalAlpha = 1; }
 const S = { state: 'menu', mode: 'random', seed: 1, chill: localStorage.getItem('inkswing.chill') === '1' };
 window.__is = S; // test hook
 window.InkPaint = { drawSeg, drawDrip, shade, hexRgb, pal: () => pal() || PALETTES[0] }; // shared with home-brush.js (home-screen brush uses the game paint engine)
@@ -136,7 +169,7 @@ function newRun(mode) {
   S.p = { x: 120, y: 470 }; S.v = { x: 0, y: 0 };
   S.pin = S.pins[0]; S.L = Math.hypot(S.p.x - 260, S.p.y - 300);
   S.holding = true; S.startX = S.p.x; S.maxX = S.p.x; S.bonus = 0; S.score = 0; S.palIdx = 0; S.palT = 1; S.prevPal = 0;
-  S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.sid = 0; S.poolT = 0; S.last = null; S.passed = 0; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0; S.lastPin = null;
+  S.colIdx = 0; S.trail = []; S.parts = []; S.ops = []; S.chunks = new Map(); S.minChunk = -99; S.k = Math.min(1.25, DPR * scale); S.drips = []; S.sdrips = []; S.fx = []; S.ribbon = []; S.sid = 0; S.poolT = 0; S.last = null; S.passed = 0; S.shake = 0; S.cam = 0; S.air = 0; S.lowY = 0; S.grabs = 0; S.t = 0; S.lastPin = null;
   S.trailStart = 0; S.boostT = 0; S.boostReached = false; S.boostCount = 0; S.state = 'play'; S.started = false; S.deadT = 0; S.poster = null;
   $('score').textContent = '0'; $('score').classList.remove('boost'); setPalLabel();
   document.body.classList.remove('onstart'); $('hud').classList.remove('hidden'); $('start').classList.remove('show'); $('over').classList.remove('show');
@@ -363,7 +396,7 @@ function step(dt) {
       splat(p.x, p.y, pal().cols[0], .8); toast('TRY AGAIN', pal().cols[0]); vibrate(10); }
     else if (p.y > WH + 120 || (!opening && p.x < S.cam - 120)) die();
   }
-  S.palT = Math.min(1, S.palT + dt * 1.5);
+  S.palT = Math.min(1, S.palT + dt * 1.5); brushFx(dt);
   for (const q of S.parts) { q.vy += G * .7 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt;
     if (q.life <= 0 && q.y < WH && q.y > 0) paint({ t: 'd', x: q.x, y: q.y, r: q.r * .8, a: Math.atan2(q.vy, q.vx), c: q.c, m: q.m, bx0: q.x - 20, bx1: q.x + 20 }); }
   S.parts = S.parts.filter(q => q.life > 0);
@@ -389,6 +422,7 @@ function die() { sfx.death(); swish(0, false); deathSplash();
   S.state = 'dead'; S.shake = 22; vibrate([30, 40, 60]);
   const key = (S.mode === 'daily' ? 'inkswing.best.daily.' + today() : 'inkswing.best') + (S.chill ? '.chill' : '');
   S.best = Math.max(store.get(key, 0), S.score); store.set(key, S.best);
+  shopState.wallet += Math.max(0, S.score | 0); store.set('inkswing.wallet', shopState.wallet);
   if (S.mode === 'random') $('bestStart').textContent = S.best;
   setTimeout(gameOver, 1250);
 }
@@ -450,11 +484,13 @@ function render() {
   for (const q of S.parts) { const sp = Math.hypot(q.vx, q.vy), st = 1 + Math.min(2.2, sp / 600); g.fillStyle = q.c; g.beginPath(); g.ellipse(q.x, q.y, q.r * st, q.r / Math.sqrt(st), Math.atan2(q.vy, q.vx), 0, 6.283); g.fill(); }
   // brush: handle points toward pin (or opposite of velocity in the air)
   let ang = S.pin ? Math.atan2(S.pin.y - p.y, S.pin.x - p.x) : Math.atan2(-S.v.y, -S.v.x) * .4 + (-Math.PI / 2) * .6;
-  g.save(); g.translate(p.x, p.y); g.rotate(ang);
+  drawFx(g);
+  g.save(); g.translate(p.x, p.y); g.rotate(ang); const BS = eqBrush(), BI = BIMG[BS.id];
+  if (BI && BI.complete && BI.naturalWidth) { g.rotate(-Math.PI / 2); g.drawImage(BI, -26, -26, 52, 134); g.fillStyle = color(); g.globalAlpha = .9; g.beginPath(); g.arc(0, -18, 8, 0, 6.283); g.fill(); g.globalAlpha = 1; g.restore(); } else {
   g.fillStyle = '#C8102E'; g.fillRect(34, -7, 70, 14); g.fillStyle = P.ink; g.beginPath(); g.arc(104, 0, 7, -1.57, 1.57); g.fill();
   g.fillStyle = '#B9B9B9'; g.fillRect(14, -10, 22, 20);
   g.fillStyle = color(); g.beginPath(); g.moveTo(16, -11); g.quadraticCurveTo(-6, -14, -22, 0); g.quadraticCurveTo(-6, 14, 16, 11); g.closePath(); g.fill();
-  g.restore();
+  g.restore(); }
   if (S.sdrips.length) { g.setTransform(DPR, 0, 0, DPR, 0, 0);
     for (const d of S.sdrips) { g.fillStyle = g.strokeStyle = d.c; g.beginPath(); g.ellipse(d.x, 0, d.w * 1.8, d.w * 1.2 + d.len * .08, 0, 0, 6.283); g.fill();
       if (d.len > 0) { g.lineCap = 'round'; g.lineWidth = d.w; g.beginPath(); g.moveTo(d.x, 0); g.lineTo(d.x, d.len); g.stroke(); g.beginPath(); g.ellipse(d.x, d.len, d.w * .8, d.w, 0, 0, 6.283); g.fill();
@@ -556,6 +592,15 @@ $('pkFix').onclick = autoFix;
 $('pkSave').onclick = () => { let r = drawCustom(); if (!r.ok) { autoFix(); r = drawCustom(); } custom = { cols: r.cols, hsl: cHSL }; store.set(PKEY + '.custom', custom); $('pkCustom').hidden = true; savePal('custom'); };
 $('pkCancel').onclick = () => { $('pkCustom').hidden = true; };
 $('hbPal').onclick = () => { renderPicker(); $('picker').hidden = false; };
+function renderShop() { $('shopWallet').textContent = shopState.wallet;
+  $('shopList').innerHTML = BRUSHES.map(b => { const own = shopState.owned.includes(b.id), eq = eqBrush().id === b.id;
+    const act = eq ? '<em>EQUIPPED</em>' : own ? `<button class="hb-play sh-btn" data-eq="${b.id}">Equip</button>` : `<button class="hb-play sh-btn" data-buy="${b.id}"${shopState.wallet < b.price ? ' disabled' : ''}>💧 ${b.price}</button>`;
+    return `<div class="sh-item${eq ? ' sel' : ''}"><div class="sh-ic${b.fx ? '' : ' sh-classic'}">${b.fx ? `<img src="img/brushes/${b.id}-icon.png" alt="">` : '🖌️'}</div><div class="sh-tx"><b>${b.name}</b><small>${b.desc}</small></div>${act}</div>`; }).join('');
+  $('shopList').querySelectorAll('[data-buy]').forEach(e => e.onclick = () => { const b = BRUSHES.find(x => x.id === e.dataset.buy); if (shopState.wallet < b.price) return; shopState.wallet -= b.price; shopState.owned.push(b.id); shopState.eq = b.id; store.set('inkswing.wallet', shopState.wallet); store.set('inkswing.owned', shopState.owned); store.set('inkswing.brush', b.id); renderShop(); });
+  $('shopList').querySelectorAll('[data-eq]').forEach(e => e.onclick = () => { shopState.eq = e.dataset.eq; store.set('inkswing.brush', shopState.eq); renderShop(); }); }
+$('btnShop').onclick = () => { renderShop(); $('shop').hidden = false; };
+$('shopClose').onclick = () => { $('shop').hidden = true; };
+$('shop').onclick = e => { if (e.target.id === 'shop') $('shop').hidden = true; };
 $('pkClose').onclick = () => { $('picker').hidden = true; $('pkCustom').hidden = true; };
 $('picker').onclick = e => { if (e.target.id === 'picker') $('pkClose').onclick(); };
 const scoreSheet = () => { const t = today(), rows = [['Obstacles', 'inkswing.best'], ['Chill', 'inkswing.best.chill'], ['Daily · Obstacles', 'inkswing.best.daily.' + t], ['Daily · Chill', 'inkswing.best.daily.' + t + '.chill']];

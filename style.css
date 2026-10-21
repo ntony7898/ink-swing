@@ -119,3 +119,14 @@ button.hb-pal{background:none;border:0;padding:6px 0 6px 10px;color:inherit;font
 .pk-slots{display:flex;gap:14px}.pk-slot{width:56px;height:56px;border-radius:50%;border:3px solid currentColor;cursor:pointer}.pk-slot.sel{outline:4px solid currentColor;outline-offset:3px}
 .pk-warn{font-weight:700;font-size:13px}.pk-warn.bad{color:#E8392D}body.hw .pk-warn.bad{color:#FF7A1A}.pk-row{display:flex;gap:12px;align-items:center;justify-content:flex-end}.pk-save{height:48px;font-size:18px;flex:0 0 auto;padding:0 18px}
 @media (prefers-reduced-motion:reduce){.pk-opt{transition:none}}
+
+.hb-tr{display:flex;gap:8px}
+.sh-wallet{margin:0 0 12px;font-weight:700}.sh-wallet b{font:400 22px "Archivo Black",Impact,sans-serif}.sh-wallet small{opacity:.7}
+.sh-item{display:flex;align-items:center;gap:12px;padding:10px;border:2px solid currentColor}.sh-item.sel{box-shadow:5px 5px 0 #E8392D}body.hw .sh-item.sel{box-shadow:5px 5px 0 #7BE04A}
+.sh-ic{width:58px;height:58px;flex:0 0 58px;display:grid;place-items:center;font-size:34px}.sh-ic img{width:58px;height:58px;animation:shSwing 2.4s ease-in-out infinite;transform-origin:50% 20%}
+@keyframes shSwing{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(12deg)}}
+.sh-tx{flex:1;min-width:0}.sh-tx b{display:block;font:400 16px "Archivo Black",Impact,sans-serif}.sh-tx small{font-size:12px;opacity:.8;line-height:1.3;display:block}
+.sh-btn{height:44px;font-size:15px;padding:0 12px;flex:0 0 auto;width:auto}.sh-btn[disabled]{opacity:.4}.sh-item em{font:400 11px "Archivo Black";letter-spacing:.08em}
+@media (prefers-reduced-motion:reduce){.sh-ic img{animation:none}}
+body.onstart #mute,body.hw.onstart #mute{top:calc(66px + env(safe-area-inset-top));right:16px}#btnShop{padding:7px 10px}
+.hb-sheet{--P:#F2E9DA;--K:#111111}body.hw .hb-sheet{--P:#1B1028;--K:#F2E9DA}body.hw .hb-sheet .hb-play{background:#FF7A1A;color:#160D22}
