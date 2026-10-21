@@ -15,7 +15,7 @@
     g.setTransform(dpr, 0, 0, dpr, 0, 0); pg.setTransform(dpr, 0, 0, dpr, 0, 0); last = null; }
   // colours: current palette, skipping ones that vanish on the paper home background
   const lum = h => { const c = hexRgb(h); return (c[0] * .3 + c[1] * .59 + c[2] * .11) / 255; };
-  const cols = () => { if (HW) return ['#FF7A1A', '#9BD84A', '#7BE04A', '#C5A84A']; const c = pal().cols.filter(h => lum(h) < .8); return c.length ? c : ['#E8392D']; };
+  const cols = () => { if (IP.fixed && IP.fixed()) return pal().cols.slice(0, 3); if (HW) return ['#FF7A1A', '#9BD84A', '#7BE04A', '#C5A84A']; const c = pal().cols.filter(h => lum(h) < .8); return c.length ? c : ['#E8392D']; };
   const pin = () => ({ x: W / 2, y: 8 }), L = () => Math.min(104, H - 34);
   const pos = t => { const a = .95 * Math.sin(t * 2.618); return { x: pin().x + Math.sin(a) * L(), y: pin().y + Math.cos(a) * L(), a }; };
   function push(p, v) { // same maths as game.js pushTrail()

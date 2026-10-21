@@ -15,7 +15,42 @@ const CPAL = [
   { name: 'Risograph', bg: '#F7EFE3', ink: '#1B2A6B', cols: ['#FF48B0', '#0078BF', '#FFE800', '#00A95C'], deco: 'riso', blend: 'multiply' },
   { name: 'Memphis', bg: '#FFF1DC', ink: '#1A1A1A', cols: ['#FF6F91', '#2EC4B6', '#FFD23F', '#6A4C93'], deco: 'memphis' },
 ];
-const PALETTES = HW ? HPAL : CPAL;
+const HX = [ // extra fixed palettes (picker only; never in auto rotation)
+  ["Witch's Brew", '#0E1410', '#EAF2DF', ['#9BFF3C', '#B05CFF', '#FFB13B'], 'riso'],
+  ['Graveyard Fog', '#14161C', '#E6E8EE', ['#B8C4D6', '#FF6A3D', '#6FE3C1'], 'swiss'],
+  ['Vampire Velvet', '#14060C', '#F5E1E6', ['#FF2D55', '#F5E1E6', '#B07CFF'], 'bauhaus'],
+  ['Pumpkin Spice', '#1A0F0A', '#FFF0DC', ['#FF8A1F', '#FFE08A', '#C2410C'], 'memphis'],
+  ['Ghost Glow', '#0C1020', '#F4F8FF', ['#F4F8FF', '#5EE6FF', '#FF5AC8'], 'riso'],
+  ['Cursed Neon', '#0B0716', '#F2ECFF', ['#39FF14', '#FF2BD6', '#00E5FF'], 'memphis'],
+  ['Hex Fire', '#160A06', '#FFEBD6', ['#FFD000', '#FF3B1F', '#8D7BFF'], 'bauhaus'],
+  ['Moonlit Bones', '#101018', '#F1EEE4', ['#F1EEE4', '#FF9F1C', '#7A6CFF'], 'swiss'],
+];
+const CX = [
+  ['De Stijl', '#F5F2EA', '#0F0F0F', ['#D7261E', '#1A43B8', '#F2C200'], 'bauhaus'],
+  ['Pop Art', '#FFF6E5', '#111111', ['#FF2E63', '#00A8E8', '#FFC300'], 'memphis'],
+  ['Sunset Riso', '#F7EFE3', '#2A1B3D', ['#FF5E3A', '#7B2FBE', '#E8A400'], 'riso'],
+  ['Pastel Memphis', '#FFF4E6', '#2B2B2B', ['#F47FA4', '#2FB5A8', '#7C5CC4'], 'memphis'],
+  ['Mono Ink', '#F4F2EC', '#111111', ['#111111', '#6B6B6B', '#D13B2C'], 'swiss'],
+  ['Ocean Swiss', '#F2F5F4', '#0D1B2A', ['#0057B8', '#00A6A6', '#F25C05'], 'swiss'],
+  ['Forest Print', '#F3EEE2', '#1C2418', ['#2E7D32', '#C0392B', '#D9A400'], 'riso'],
+  ['Primary Grid', '#F7F7F2', '#111111', ['#E4002B', '#111111', '#0072CE'], 'bauhaus'],
+].map(a => a);
+const XPAL = (HW ? HX : CX).map(([name, bg, ink, cols, deco]) => ({ name, bg, ink, cols, deco }));
+const PALETTES = HW ? HPAL : CPAL, ALLPAL = [...PALETTES, ...XPAL];
+const THEME = HW ? 'halloween' : 'classic', PKEY = 'inkswing.palette.' + THEME;
+// contrast helpers (WCAG-ish relative luminance)
+const relL = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+const contrast = (a, b) => { const x = relL(a), y = relL(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const cdist = (a, b) => { const A = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), B = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16)); return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]); };
+const hsl2hex = (h, s, l) => { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)); return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('').toUpperCase(); };
+const BASEBG = PALETTES[0].bg, MINBG = HW ? 3 : 2.2, MINDIST = 90;
+// nudge lightness until colour reads on the background
+function fixBg(h, s, l) { let c = hsl2hex(h, s, l), n = 0; while (contrast(c, BASEBG) < MINBG && n++ < 40) { l += HW ? 2 : -2; l = Math.max(5, Math.min(95, l)); c = hsl2hex(h, s, l); } return { c, l }; }
+let palChoice = store0(PKEY, 'auto'); // 'auto' | palette name | 'custom'
+let custom = store0(PKEY + '.custom', null);
+function store0(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }
+const customPal = () => ({ name: 'Custom', bg: PALETTES[0].bg, ink: PALETTES[0].ink, cols: (custom && custom.cols) || PALETTES[0].cols.slice(0, 3), deco: PALETTES[0].deco });
+const fixedPal = () => palChoice === 'custom' ? customPal() : palChoice === 'auto' ? null : ALLPAL.find(p => p.name === palChoice) || null;
 const $ = id => document.getElementById(id);
 const cv = $('c'), cx = cv.getContext('2d');
 const store = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
@@ -108,7 +143,7 @@ function newRun(mode) {
   if (!store.get('inkswing.seen', false)) $('hint').classList.remove('hidden');
   pushTrail(true);
 }
-const pal = () => PALETTES[S.palIdx % PALETTES.length];
+const pal = () => fixedPal() || PALETTES[(S.palIdx || 0) % PALETTES.length];
 const color = () => pal().cols[S.cur % NC];
 function setPalLabel() { $('pal').textContent = pal().name; $('pal').style.background = pal().cols[0]; document.querySelector('meta[name=theme-color]').content = pal().bg; }
 function toast(t, c) { const e = $('toast'); e.textContent = t; e.style.color = c || pal().ink; e.classList.remove('go'); void e.offsetWidth; e.classList.add('go'); }
@@ -321,7 +356,7 @@ function step(dt) {
     S.maxX = Math.max(S.maxX, p.x);
     const sc = Math.floor((S.maxX - S.startX) / 120) + S.bonus;
     if (sc !== S.score) { S.score = sc; const e = $('score'); e.textContent = sc; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump');
-      const pi = Math.floor(sc / 10); if (pi !== S.palIdx) { sfx.chime(); S.prevPal = S.palIdx; S.palIdx = pi; S.palT = 0; setPalLabel(); toast(pal().name.toUpperCase(), pal().cols[0]); splat(p.x, p.y, pal().cols[0], 1.3); } }
+      const pi = fixedPal() ? 0 : Math.floor(sc / 10); if (pi !== S.palIdx) { sfx.chime(); S.prevPal = S.palIdx; S.palIdx = pi; S.palT = 0; setPalLabel(); toast(pal().name.toUpperCase(), pal().cols[0]); splat(p.x, p.y, pal().cols[0], 1.3); } }
     genPins(S.pins.length + (S.pins[S.pins.length - 1].x < p.x + 2500 ? 4 : 0));
     const opening = S.grabs < 3;
     if (opening && p.y > WH + 120) { const pn = S.lastPin || S.pin || S.pins[0]; S.pin = pn; S.L = 200; p.x = pn.x; p.y = pn.y + 200; v.x = 160; v.y = 0; S.air = 0; S.last = null; pushTrail(true);
@@ -386,8 +421,8 @@ function drawDeco(g, x0, x1, P, alpha) { // parallax design-movement motifs
 }
 function render() {
   const g = cx; g.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const P = pal(), Q = PALETTES[S.prevPal % 4], t = S.palT;
-  g.fillStyle = S.pins ? mixHex(Q.bg, P.bg, t) : PALETTES[0].bg; g.fillRect(0, 0, W, H);
+  const P = pal(), Q = fixedPal() || PALETTES[S.prevPal % 4], t = S.palT;
+  g.fillStyle = S.pins ? mixHex(Q.bg, P.bg, t) : pal().bg; g.fillRect(0, 0, W, H);
   if (!S.pins) return;
   const sh = S.shake, ox = (Math.random() - .5) * sh, oy = (Math.random() - .5) * sh;
   g.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * (-S.cam * scale + ox), DPR * oy);
@@ -440,7 +475,7 @@ async function makePoster() {
   g.fillStyle = PC.ink; g.font = `190px ${F}`; g.textAlign = 'left'; g.fillText('INK', 54, 220); g.fillStyle = PC.acc; g.fillText('SWING', 54, 400); if (HW) { g.fillStyle = PC.ink; g.font = `34px ${F}`; g.fillText('HALLOWEEN EDITION', 60, 445); g.font = `190px ${F}`; }
   g.fillStyle = PC.ink; g.font = `bold 26px system-ui,sans-serif`; g.textAlign = 'right';
   g.fillText((S.chill ? 'CHILL MODE · ' : 'OBSTACLE MODE · ') + (S.mode === 'daily' ? `DAILY ${today()}` : `RUN #${String(S.seed % 100000).padStart(5, '0')}`), Wp - 60, 90);
-  g.fillText(`${S.grabs} GRABS · ${S.cleared} OBSTACLES CLEARED`, Wp - 60, 128); if (S.boostReached) { g.fillStyle = PC.acc; g.fillText(`★ INK BOOST REACHED${S.boostCount ? ` · ${S.boostCount} CANS` : ''}`, Wp - 60, 204); g.fillStyle = PC.ink; } g.fillText(PALETTES.slice(0, Math.min(4, S.palIdx + 1)).map(p => p.name.toUpperCase()).join(' / '), Wp - 60, 166);
+  g.fillText(`${S.grabs} GRABS · ${S.cleared} OBSTACLES CLEARED`, Wp - 60, 128); if (S.boostReached) { g.fillStyle = PC.acc; g.fillText(`★ INK BOOST REACHED${S.boostCount ? ` · ${S.boostCount} CANS` : ''}`, Wp - 60, 204); g.fillStyle = PC.ink; } g.fillText((fixedPal() ? [fixedPal()] : PALETTES.slice(0, Math.min(4, S.palIdx + 1))).map(p => p.name.toUpperCase()).join(' / '), Wp - 60, 166);
   // art: the whole trail, wrapped into stacked strips like lines of text
   const ax = 60, ay = HW ? 480 : 450, aw = 960, ah = HW ? 1020 : 1050;
   g.fillStyle = PC.art; g.fillRect(ax, ay, aw, ah);
@@ -492,7 +527,37 @@ $('btnMenu').onclick = () => { document.body.classList.add('onstart'); $('over')
 const modeUI = () => { const k = 'inkswing.best' + (S.chill ? '.chill' : ''); $('bestStart').textContent = store.get(k, 0); $('bestLabel').textContent = S.chill ? 'BEST · CHILL' : 'BEST · OBSTACLES';
   const c = $('btnChill'); c.classList.toggle('on', S.chill); c.setAttribute('aria-pressed', S.chill); $('chillState').textContent = S.chill ? 'ON' : 'OFF';
   $('chillSub').textContent = S.chill ? 'On: no obstacles, just paint' : 'No obstacles, just paint'; };
-const P0 = PALETTES[0]; $('palLabel').textContent = 'PALETTE · ' + P0.name.toUpperCase(); $('palDots').innerHTML = [...new Set([...P0.cols, P0.ink])].slice(0, 4).map(c => `<i style="background:${c}"></i>`).join('');
+const dots = cs => cs.map(c => `<i style="background:${c}"></i>`).join('');
+const homePal = () => { const F = fixedPal(), P0 = F || PALETTES[0]; $('palLabel').textContent = F ? 'PALETTE · ' + F.name.toUpperCase() : 'PALETTE · AUTO ROTATE'; $('palDots').innerHTML = dots(F ? F.cols.slice(0, 3) : [...new Set([...P0.cols, P0.ink])].slice(0, 4)); };
+homePal(); window.InkPaint.fixed = () => !!fixedPal();
+const savePal = v => { palChoice = v; store.set(PKEY, v); homePal(); renderPicker(); };
+function renderPicker() {
+  const opt = (id, name, cs, sub) => `<button class="pk-opt${palChoice === id ? ' sel' : ''}" data-id="${id.replace(/"/g, '&quot;')}" aria-pressed="${palChoice === id}"><span><b>${name}</b>${sub ? `<small>${sub}</small>` : ''}</span><span class="pk-dots">${dots(cs)}</span></button>`;
+  $('pkList').innerHTML = opt('auto', 'Auto Rotate', PALETTES.map(p => p.cols[0]), 'Changes every 10 points')
+    + ALLPAL.map(p => opt(p.name, p.name, p.cols.slice(0, 3))).join('')
+    + opt('custom', 'Custom', customPal().cols, 'Pick your own 3 colours');
+  $('pkList').querySelectorAll('.pk-opt').forEach(b => b.onclick = () => { if (b.dataset.id === 'custom') { savePal('custom'); openCustom(); } else savePal(b.dataset.id); });
+}
+let cSel = 0, cHSL = null;
+function openCustom() { const cs = customPal().cols; cHSL = (custom && custom.hsl) || cs.map((c, i) => [[25, 270, 120][i], 95, HW ? 60 : 45]); if (!custom) { cHSL = cHSL.map(([h, s, l]) => [h, s, fixBg(h, s, l).l]); } $('pkCustom').hidden = false; cSel = 0; drawCustom(); }
+function drawCustom() { const cols = cHSL.map(([h, s, l]) => hsl2hex(h, s, l));
+  $('pkSlots').innerHTML = cols.map((c, i) => `<button class="pk-slot${i === cSel ? ' sel' : ''}" data-i="${i}" style="background:${c}" aria-label="Colour ${i + 1}"></button>`).join('');
+  $('pkSlots').querySelectorAll('.pk-slot').forEach(b => b.onclick = () => { cSel = +b.dataset.i; drawCustom(); });
+  const [h, s, l] = cHSL[cSel]; $('pkHue').value = h; $('pkLight').value = l; $('pkLight').style.background = `linear-gradient(90deg,${hsl2hex(h, s, 10)},${hsl2hex(h, s, 50)},${hsl2hex(h, s, 90)})`;
+  const warn = []; cols.forEach((c, i) => { if (contrast(c, BASEBG) < MINBG) warn.push(`Colour ${i + 1} is hard to see on the background`); });
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) if (cdist(cols[i], cols[j]) < MINDIST) warn.push(`Colours ${i + 1} & ${j + 1} look too similar`);
+  $('pkWarn').textContent = warn.length ? '⚠ ' + warn.join(' · ') + ' — tap Fix' : '✓ Readable — obstacles will be clear'; $('pkWarn').classList.toggle('bad', !!warn.length); $('pkFix').hidden = !warn.length; return { cols, ok: !warn.length }; }
+function autoFix() { for (let pass = 0; pass < 12; pass++) { cHSL = cHSL.map(([h, s, l]) => [h, s, fixBg(h, s, l).l]); let moved = false;
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) if (cdist(hsl2hex(...cHSL[i]), hsl2hex(...cHSL[j])) < MINDIST) { cHSL[j][0] = (cHSL[j][0] + 40) % 360; moved = true; }
+  if (!moved) break; } drawCustom(); }
+$('pkHue').oninput = e => { cHSL[cSel][0] = +e.target.value; drawCustom(); };
+$('pkLight').oninput = e => { cHSL[cSel][2] = +e.target.value; drawCustom(); };
+$('pkFix').onclick = autoFix;
+$('pkSave').onclick = () => { let r = drawCustom(); if (!r.ok) { autoFix(); r = drawCustom(); } custom = { cols: r.cols, hsl: cHSL }; store.set(PKEY + '.custom', custom); $('pkCustom').hidden = true; savePal('custom'); };
+$('pkCancel').onclick = () => { $('pkCustom').hidden = true; };
+$('hbPal').onclick = () => { renderPicker(); $('picker').hidden = false; };
+$('pkClose').onclick = () => { $('picker').hidden = true; $('pkCustom').hidden = true; };
+$('picker').onclick = e => { if (e.target.id === 'picker') $('pkClose').onclick(); };
 const scoreSheet = () => { const t = today(), rows = [['Obstacles', 'inkswing.best'], ['Chill', 'inkswing.best.chill'], ['Daily · Obstacles', 'inkswing.best.daily.' + t], ['Daily · Chill', 'inkswing.best.daily.' + t + '.chill']];
   $('scoreList').innerHTML = rows.map(([n, k]) => `<li>${n}<b>${store.get(k, 0)}</b></li>`).join(''); $('scores').hidden = false; };
 $('btnScoresClose').onclick = () => { $('scores').hidden = true; };

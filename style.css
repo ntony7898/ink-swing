@@ -105,3 +105,17 @@ body.hw .hb-sheet-in{background:#1B1028;color:#F2E9DA;border-top-color:#FF7A1A}b
 body.hw.onstart #mute{top:calc(42px + env(safe-area-inset-top));background:#1B1028;color:#F2E9DA;border-color:#F2E9DA}
 .hw-only{display:none}body.hw .hw-only{display:inline}
 body.hw .hb-swing::after{content:"🎃";position:absolute;left:-6px;bottom:-4px;font-size:30px;opacity:.9}
+
+button.hb-pal{background:none;border:0;padding:6px 0 6px 10px;color:inherit;font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:flex-end}button.hb-pal span{display:block}
+.pk-in{max-height:86vh;overflow:auto}.pk-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.pk-opt{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:52px;padding:8px 12px;background:transparent;color:inherit;border:2px solid currentColor;font:inherit;text-align:left;cursor:pointer}
+.pk-opt b{display:block;font:400 17px "Archivo Black",Impact,sans-serif}.pk-opt small{font-size:12px;opacity:.75}
+.pk-opt.sel{background:#111;color:#F2E9DA;box-shadow:5px 5px 0 #E8392D}body.hw .pk-opt.sel{background:#FF7A1A;color:#160D22;box-shadow:5px 5px 0 #7BE04A}
+.pk-dots{display:flex;gap:5px}.pk-dots i{width:22px;height:22px;border-radius:50%;border:2px solid currentColor}
+.pk-custom{border:2px solid currentColor;padding:14px;margin-bottom:16px}.pk-custom label{display:block;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.1em;margin:10px 0}
+.pk-custom input{width:100%;height:36px;-webkit-appearance:none;appearance:none;border:2px solid currentColor;border-radius:18px;margin-top:6px}
+.pk-hue{background:linear-gradient(90deg,red,#ff0,lime,cyan,blue,#f0f,red)}
+.pk-custom input::-webkit-slider-thumb{-webkit-appearance:none;width:34px;height:34px;border-radius:50%;background:#fff;border:3px solid #111}
+.pk-slots{display:flex;gap:14px}.pk-slot{width:56px;height:56px;border-radius:50%;border:3px solid currentColor;cursor:pointer}.pk-slot.sel{outline:4px solid currentColor;outline-offset:3px}
+.pk-warn{font-weight:700;font-size:13px}.pk-warn.bad{color:#E8392D}body.hw .pk-warn.bad{color:#FF7A1A}.pk-row{display:flex;gap:12px;align-items:center;justify-content:flex-end}.pk-save{height:48px;font-size:18px;flex:0 0 auto;padding:0 18px}
+@media (prefers-reduced-motion:reduce){.pk-opt{transition:none}}
